@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="TransLink.Lite.API/TransLink.Lite.API.csproj" />
+  <Project Path="TransLink.Lite.Application/TransLink.Lite.Application.csproj" />
+  <Project Path="TransLink.Lite.Domain/TransLink.Lite.Domain.csproj" />
+  <Project Path="TransLink.Lite.Infrastructure/TransLink.Lite.Infrastructure.csproj" />
+</Solution>
