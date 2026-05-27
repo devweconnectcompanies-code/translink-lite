@@ -1,0 +1,16 @@
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/bin/Debug/net10.0/TransLink.Lite.Application.deps.json
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/bin/Debug/net10.0/TransLink.Lite.Application.dll
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/bin/Debug/net10.0/TransLink.Lite.Application.pdb
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/bin/Debug/net10.0/TransLink.Lite.Domain.dll
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/bin/Debug/net10.0/TransLink.Lite.Domain.pdb
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/obj/Debug/net10.0/TransLink.Lite.Application.csproj.AssemblyReference.cache
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/obj/Debug/net10.0/TransLink.Lite.Application.GeneratedMSBuildEditorConfig.editorconfig
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/obj/Debug/net10.0/TransLink.Lite.Application.AssemblyInfoInputs.cache
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/obj/Debug/net10.0/TransLink.Lite.Application.AssemblyInfo.cs
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/obj/Debug/net10.0/TransLink.Lite.Application.csproj.CoreCompileInputs.cache
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/obj/Debug/net10.0/TransLink.Lite.Application.sourcelink.json
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/obj/Debug/net10.0/TransLin.2EC3EAED.Up2Date
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/obj/Debug/net10.0/TransLink.Lite.Application.dll
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/obj/Debug/net10.0/refint/TransLink.Lite.Application.dll
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/obj/Debug/net10.0/TransLink.Lite.Application.pdb
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Application/obj/Debug/net10.0/ref/TransLink.Lite.Application.dll

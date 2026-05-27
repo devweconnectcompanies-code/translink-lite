@@ -1,0 +1,12 @@
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Domain/bin/Debug/net10.0/TransLink.Lite.Domain.deps.json
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Domain/bin/Debug/net10.0/TransLink.Lite.Domain.dll
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Domain/bin/Debug/net10.0/TransLink.Lite.Domain.pdb
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Domain/obj/Debug/net10.0/TransLink.Lite.Domain.GeneratedMSBuildEditorConfig.editorconfig
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Domain/obj/Debug/net10.0/TransLink.Lite.Domain.AssemblyInfoInputs.cache
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Domain/obj/Debug/net10.0/TransLink.Lite.Domain.AssemblyInfo.cs
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Domain/obj/Debug/net10.0/TransLink.Lite.Domain.csproj.CoreCompileInputs.cache
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Domain/obj/Debug/net10.0/TransLink.Lite.Domain.sourcelink.json
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Domain/obj/Debug/net10.0/TransLink.Lite.Domain.dll
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Domain/obj/Debug/net10.0/refint/TransLink.Lite.Domain.dll
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Domain/obj/Debug/net10.0/TransLink.Lite.Domain.pdb
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.Domain/obj/Debug/net10.0/ref/TransLink.Lite.Domain.dll

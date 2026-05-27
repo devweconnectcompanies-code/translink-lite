@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "TransLink.Lite.Application/1.0.0": {
+        "dependencies": {
+          "TransLink.Lite.Domain": "1.0.0"
+        },
+        "runtime": {
+          "TransLink.Lite.Application.dll": {}
+        }
+      },
+      "TransLink.Lite.Domain/1.0.0": {
+        "runtime": {
+          "TransLink.Lite.Domain.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "TransLink.Lite.Application/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "TransLink.Lite.Domain/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
