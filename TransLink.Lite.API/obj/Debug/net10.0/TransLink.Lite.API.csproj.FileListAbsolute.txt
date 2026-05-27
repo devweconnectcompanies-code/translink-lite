@@ -127,3 +127,6 @@
 /Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.API/obj/Debug/net10.0/TransLink.Lite.API.pdb
 /Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.API/obj/Debug/net10.0/TransLink.Lite.API.genruntimeconfig.cache
 /Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.API/obj/Debug/net10.0/ref/TransLink.Lite.API.dll
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.API/bin/Debug/net10.0/Swashbuckle.AspNetCore.Swagger.dll
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.API/bin/Debug/net10.0/Swashbuckle.AspNetCore.SwaggerGen.dll
+/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.API/bin/Debug/net10.0/Swashbuckle.AspNetCore.SwaggerUI.dll

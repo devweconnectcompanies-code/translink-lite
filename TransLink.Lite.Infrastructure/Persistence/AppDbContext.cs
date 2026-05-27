@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TransLink.Lite.Domain.Entities;
 
 namespace TransLink.Lite.Infrastructure.Persistence;
 
@@ -8,4 +9,6 @@ public class AppDbContext : DbContext
         : base(options)
     {
     }
+
+    public DbSet<User> Users => Set<User>();
 }
