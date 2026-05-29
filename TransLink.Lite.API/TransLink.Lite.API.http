@@ -1,6 +1,6 @@
 @TransLink.Lite.API_HostAddress = http://localhost:5221
 
-GET {{TransLink.Lite.API_HostAddress}}/weatherforecast/
+GET {{TransLink.Lite.API_HostAddress}}/health
 Accept: application/json
 
 ###

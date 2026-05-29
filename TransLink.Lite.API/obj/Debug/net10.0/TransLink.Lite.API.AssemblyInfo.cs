@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TransLink.Lite.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ae3db99bcf53c773bf2b7a1579ef79b29fa85214")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ec36336383ef77b1764023d8085cc54f25631c6f")]
 [assembly: System.Reflection.AssemblyProductAttribute("TransLink.Lite.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TransLink.Lite.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
