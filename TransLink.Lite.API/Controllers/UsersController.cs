@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TransLink.Lite.Application.Auth.Interfaces;
@@ -7,6 +8,7 @@ using TransLink.Lite.Infrastructure.Persistence;
 
 namespace TransLink.Lite.API.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/[controller]")]
 public class UsersController : ControllerBase
