@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using TransLink.Lite.Application.Auth.Interfaces;
 using TransLink.Lite.Application.Users.DTOs;
 using TransLink.Lite.Domain.Entities;
 using TransLink.Lite.Infrastructure.Persistence;
@@ -11,10 +12,12 @@ namespace TransLink.Lite.API.Controllers;
 public class UsersController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly IPasswordHasher _passwordHasher;
 
-    public UsersController(AppDbContext context)
+    public UsersController(AppDbContext context, IPasswordHasher passwordHasher)
     {
         _context = context;
+        _passwordHasher = passwordHasher;
     }
 
     [HttpGet]
@@ -28,7 +31,7 @@ public class UsersController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<UserResponse>> CreateUser(CreateUserRequest request)
     {
-        var user = MapToEntity(request);
+        var user = MapToEntity(request, _passwordHasher.HashPassword(request.Password));
 
         _context.Users.Add(user);
 
@@ -37,13 +40,13 @@ public class UsersController : ControllerBase
         return Ok(MapToResponse(user));
     }
 
-    private static User MapToEntity(CreateUserRequest request) => new()
+    private static User MapToEntity(CreateUserRequest request, string passwordHash) => new()
     {
         Id = Guid.NewGuid(),
         FirstName = request.FirstName,
         LastName = request.LastName,
         Email = request.Email,
-        PasswordHash = request.Password,
+        PasswordHash = passwordHash,
         PreferredLanguage = request.PreferredLanguage,
         CreatedAt = DateTime.UtcNow,
     };

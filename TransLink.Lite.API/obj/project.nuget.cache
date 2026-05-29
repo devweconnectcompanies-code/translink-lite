@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "xnW8CRlUSpU=",
+  "dgSpecHash": "xY6wC8KoAqw=",
   "success": true,
   "projectFilePath": "/Users/sebastian/Documents/WCC/DESARROLLO/TransLink-Lite/backend/TransLink.Lite.API/TransLink.Lite.API.csproj",
   "expectedPackageFiles": [
+    "/Users/sebastian/.nuget/packages/bcrypt.net-next/4.0.3/bcrypt.net-next.4.0.3.nupkg.sha512",
     "/Users/sebastian/.nuget/packages/humanizer.core/2.14.1/humanizer.core.2.14.1.nupkg.sha512",
     "/Users/sebastian/.nuget/packages/microsoft.aspnetcore.openapi/10.0.8/microsoft.aspnetcore.openapi.10.0.8.nupkg.sha512",
     "/Users/sebastian/.nuget/packages/microsoft.build.framework/18.0.2/microsoft.build.framework.18.0.2.nupkg.sha512",

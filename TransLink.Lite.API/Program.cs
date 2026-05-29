@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using TransLink.Lite.Application.Auth.Interfaces;
+using TransLink.Lite.Infrastructure.Auth;
 using TransLink.Lite.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,6 +8,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
 
 builder.Services.AddControllers();
 
