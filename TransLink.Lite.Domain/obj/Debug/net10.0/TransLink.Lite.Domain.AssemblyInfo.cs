@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TransLink.Lite.Domain")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c62b5aac538f6b7cfb23d9ac9f597941c7e37217")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e99c7b48ca6371de1afd84432866c284fc84a171")]
 [assembly: System.Reflection.AssemblyProductAttribute("TransLink.Lite.Domain")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TransLink.Lite.Domain")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
