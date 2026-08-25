@@ -4,6 +4,24 @@ TransLink Lite does not store database credentials or JWT signing keys in tracke
 
 The current Git root is the `backend/` directory. Run the commands in this document from that directory unless a command specifies otherwise.
 
+## .NET SDK and build
+
+The backend targets .NET 10. The repository-level `global.json` selects SDK `10.0.300` and permits compatible patch servicing only within the `10.0.3xx` feature band. Preview SDKs are not accepted.
+
+Install a compatible .NET 10 SDK, then verify resolution from the current Git root:
+
+```bash
+dotnet --version
+dotnet --info
+```
+
+Restore and build the backend with:
+
+```bash
+dotnet restore TransLink.Lite.slnx
+dotnet build TransLink.Lite.slnx --no-restore --configuration Release
+```
+
 ## Required sensitive configuration
 
 The API requires these values at startup:
