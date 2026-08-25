@@ -1,0 +1,53 @@
+# .NET build output
+**/bin/
+**/obj/
+
+# Visual Studio and IDE user state
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+_ReSharper*/
+*.DotSettings.user
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Test results and coverage
+TestResults/
+**/TestResults/
+coverage/
+**/coverage/
+coverage-results/
+**/coverage-results/
+*.coverage
+*.coveragexml
+*.trx
+
+# Logs
+logs/
+**/logs/
+*.log
+
+# Node and frontend build output
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+
+# Local environment files (templates remain trackable)
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Local ASP.NET Core configuration that may contain secrets
+appsettings.Local.json
+appsettings.*.Local.json
+**/appsettings.Local.json
+**/appsettings.*.Local.json
+
