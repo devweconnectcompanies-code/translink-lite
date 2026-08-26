@@ -1,4 +1,5 @@
 using TransLink.Lite.Application.Common.Languages;
+using TransLink.Lite.Application.Common.Exceptions;
 using TransLink.Lite.Application.Common.Persistence;
 using TransLink.Lite.Application.Users.DTOs;
 using TransLink.Lite.Domain.Entities;
@@ -14,22 +15,20 @@ public sealed class UserProfileService : IUserProfileService
         _userRepository = userRepository;
     }
 
-    public async Task<UserResponse?> GetAsync(Guid userId, CancellationToken cancellationToken)
+    public async Task<UserResponse> GetAsync(Guid userId, CancellationToken cancellationToken)
     {
-        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
-        return user is null ? null : MapToResponse(user);
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundException("User profile was not found.");
+        return MapToResponse(user);
     }
 
-    public async Task<UserResponse?> UpdateAsync(
+    public async Task<UserResponse> UpdateAsync(
         Guid userId,
         UpdateUserProfileRequest request,
         CancellationToken cancellationToken)
     {
-        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
-        if (user is null)
-        {
-            return null;
-        }
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken)
+            ?? throw new NotFoundException("User profile was not found.");
 
         user.FirstName = request.FirstName.Trim();
         user.LastName = request.LastName.Trim();

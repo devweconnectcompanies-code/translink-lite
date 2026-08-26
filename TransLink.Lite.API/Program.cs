@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -6,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using TransLink.Lite.API.Configuration;
+using TransLink.Lite.API.ErrorHandling;
 using TransLink.Lite.Application.Auth;
 using TransLink.Lite.Application.Auth.Interfaces;
 using TransLink.Lite.Application.Common.Persistence;
@@ -76,6 +78,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+    {
+        context.ProblemDetails.Extensions.TryAdd(
+            "traceId",
+            Activity.Current?.Id ?? context.HttpContext.TraceIdentifier);
+    };
+});
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -113,6 +126,8 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {

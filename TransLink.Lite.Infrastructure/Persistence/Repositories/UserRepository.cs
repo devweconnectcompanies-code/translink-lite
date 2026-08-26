@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using TransLink.Lite.Application.Common.Exceptions;
 using TransLink.Lite.Application.Common.Persistence;
 using TransLink.Lite.Domain.Entities;
 
@@ -39,6 +41,18 @@ public sealed class UserRepository : IUserRepository
 
     public async Task SaveChangesAsync(CancellationToken cancellationToken)
     {
-        await _context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "IX_Users_NormalizedEmail",
+            })
+        {
+            throw new ConflictException("Email is already registered.", exception);
+        }
     }
 }

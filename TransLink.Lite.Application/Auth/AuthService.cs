@@ -1,5 +1,6 @@
 using TransLink.Lite.Application.Auth.DTOs;
 using TransLink.Lite.Application.Auth.Interfaces;
+using TransLink.Lite.Application.Common.Exceptions;
 using TransLink.Lite.Application.Common.Languages;
 using TransLink.Lite.Application.Common.Normalization;
 using TransLink.Lite.Application.Common.Persistence;
@@ -23,14 +24,14 @@ public sealed class AuthService : IAuthService
         _jwtTokenService = jwtTokenService;
     }
 
-    public async Task<AuthResponse?> RegisterAsync(
+    public async Task<AuthResponse> RegisterAsync(
         RegisterRequest request,
         CancellationToken cancellationToken)
     {
         var normalizedEmail = EmailNormalizer.Normalize(request.Email);
         if (await _userRepository.ExistsByNormalizedEmailAsync(normalizedEmail, cancellationToken))
         {
-            return null;
+            throw new ConflictException("Email is already registered.");
         }
 
         var user = new User

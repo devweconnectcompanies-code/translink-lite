@@ -27,7 +27,7 @@ public class UsersController : ControllerBase
         }
 
         var response = await _userProfileService.GetAsync(userId, cancellationToken);
-        return response is null ? NotFound() : Ok(response);
+        return Ok(response);
     }
 
     [HttpPut("me")]
@@ -41,7 +41,7 @@ public class UsersController : ControllerBase
         }
 
         var response = await _userProfileService.UpdateAsync(userId, request, cancellationToken);
-        return response is null ? NotFound() : Ok(response);
+        return Ok(response);
     }
 
     private bool TryGetCurrentUserId(out Guid userId)

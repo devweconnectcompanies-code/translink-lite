@@ -13,7 +13,7 @@ public interface ITranslationSessionService
         Guid userId,
         CancellationToken cancellationToken);
 
-    Task<TranslationSessionResponse?> GetByIdAsync(
+    Task<TranslationSessionResponse> GetByIdAsync(
         Guid id,
         Guid userId,
         CancellationToken cancellationToken);

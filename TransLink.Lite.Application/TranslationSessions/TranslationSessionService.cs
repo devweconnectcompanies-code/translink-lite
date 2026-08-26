@@ -1,4 +1,5 @@
 using TransLink.Lite.Application.Common.Languages;
+using TransLink.Lite.Application.Common.Exceptions;
 using TransLink.Lite.Application.Common.Persistence;
 using TransLink.Lite.Application.TranslationSessions.DTOs;
 using TransLink.Lite.Domain.Entities;
@@ -44,7 +45,7 @@ public sealed class TranslationSessionService : ITranslationSessionService
         return sessions.Select(MapToResponse).ToList();
     }
 
-    public async Task<TranslationSessionResponse?> GetByIdAsync(
+    public async Task<TranslationSessionResponse> GetByIdAsync(
         Guid id,
         Guid userId,
         CancellationToken cancellationToken)
@@ -54,7 +55,9 @@ public sealed class TranslationSessionService : ITranslationSessionService
             userId,
             cancellationToken);
 
-        return session is null ? null : MapToResponse(session);
+        return session is null
+            ? throw new NotFoundException("Translation session was not found.")
+            : MapToResponse(session);
     }
 
     private static TranslationSessionResponse MapToResponse(TranslationSession session) => new()

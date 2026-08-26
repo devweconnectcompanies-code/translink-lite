@@ -4,9 +4,9 @@ namespace TransLink.Lite.Application.Users;
 
 public interface IUserProfileService
 {
-    Task<UserResponse?> GetAsync(Guid userId, CancellationToken cancellationToken);
+    Task<UserResponse> GetAsync(Guid userId, CancellationToken cancellationToken);
 
-    Task<UserResponse?> UpdateAsync(
+    Task<UserResponse> UpdateAsync(
         Guid userId,
         UpdateUserProfileRequest request,
         CancellationToken cancellationToken);

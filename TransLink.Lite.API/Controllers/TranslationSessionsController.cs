@@ -59,7 +59,7 @@ public class TranslationSessionsController : ControllerBase
         }
 
         var response = await _translationSessionService.GetByIdAsync(id, userId, cancellationToken);
-        return response is null ? NotFound() : Ok(response);
+        return Ok(response);
     }
 
     private bool TryGetCurrentUserId(out Guid userId)

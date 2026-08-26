@@ -26,11 +26,6 @@ public class AuthController : ControllerBase
         CancellationToken cancellationToken)
     {
         var response = await _authService.RegisterAsync(request, cancellationToken);
-        if (response is null)
-        {
-            return Conflict(new { message = "Email is already registered." });
-        }
-
         return Ok(response);
     }
 
