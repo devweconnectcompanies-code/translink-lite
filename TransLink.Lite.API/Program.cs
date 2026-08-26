@@ -1,8 +1,11 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using TransLink.Lite.API.Configuration;
 using TransLink.Lite.Application.Auth;
 using TransLink.Lite.Application.Auth.Interfaces;
 using TransLink.Lite.Infrastructure.Auth;
@@ -22,6 +25,12 @@ var jwtSettings = jwtSection.Get<JwtSettings>()
     ?? throw new InvalidOperationException("Required JWT configuration is missing.");
 
 ValidateJwtSettings(jwtSettings);
+
+var authenticationRateLimit = builder.Configuration
+    .GetSection(AuthenticationRateLimitOptions.SectionName)
+    .Get<AuthenticationRateLimitOptions>() ?? new AuthenticationRateLimitOptions();
+
+ValidateAuthenticationRateLimit(authenticationRateLimit);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
@@ -58,6 +67,21 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(AuthenticationRateLimitOptions.PolicyName, httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = authenticationRateLimit.PermitLimit,
+                QueueLimit = authenticationRateLimit.QueueLimit,
+                Window = TimeSpan.FromSeconds(authenticationRateLimit.WindowSeconds),
+            }));
+});
+
 builder.Services.AddControllers();
 
 builder.Services.AddEndpointsApiExplorer();
@@ -89,6 +113,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -125,5 +150,26 @@ static void ValidateJwtSettings(JwtSettings settings)
     {
         throw new InvalidOperationException(
             "Required configuration 'Jwt:ExpirationMinutes' must be greater than zero.");
+    }
+}
+
+static void ValidateAuthenticationRateLimit(AuthenticationRateLimitOptions settings)
+{
+    if (settings.PermitLimit <= 0)
+    {
+        throw new InvalidOperationException(
+            "Required configuration 'RateLimiting:Authentication:PermitLimit' must be greater than zero.");
+    }
+
+    if (settings.WindowSeconds <= 0)
+    {
+        throw new InvalidOperationException(
+            "Required configuration 'RateLimiting:Authentication:WindowSeconds' must be greater than zero.");
+    }
+
+    if (settings.QueueLimit < 0)
+    {
+        throw new InvalidOperationException(
+            "Required configuration 'RateLimiting:Authentication:QueueLimit' cannot be negative.");
     }
 }

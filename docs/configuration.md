@@ -76,6 +76,20 @@ Jwt__Audience
 Jwt__ExpirationMinutes
 ```
 
+## Authentication rate limiting
+
+Public registration and login requests share a fixed-window limit per client IP. The default policy allows 10 requests per 60 seconds and does not queue excess requests. Rejected requests receive HTTP `429 Too Many Requests`.
+
+The non-sensitive settings can be tuned through configuration or environment variables:
+
+```text
+RateLimiting__Authentication__PermitLimit
+RateLimiting__Authentication__WindowSeconds
+RateLimiting__Authentication__QueueLimit
+```
+
+This limiter stores counters in the API process. It is suitable for the current single-instance baseline, but it does not provide a global limit across multiple backend instances. A trusted proxy configuration and a distributed rate-limiting strategy must be introduced before horizontal deployment.
+
 ## Startup behavior
 
 The API fails fast with a safe configuration error when:

@@ -1,5 +1,8 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using TransLink.Lite.API.Configuration;
 using TransLink.Lite.Application.Auth.DTOs;
 using TransLink.Lite.Application.Auth.Interfaces;
 using TransLink.Lite.Domain.Entities;
@@ -25,6 +28,8 @@ public class AuthController : ControllerBase
         _jwtTokenService = jwtTokenService;
     }
 
+    [AllowAnonymous]
+    [EnableRateLimiting(AuthenticationRateLimitOptions.PolicyName)]
     [HttpPost("register")]
     public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
     {
@@ -51,6 +56,8 @@ public class AuthController : ControllerBase
         return Ok(MapToAuthResponse(user, _jwtTokenService.GenerateAccessToken(user)));
     }
 
+    [AllowAnonymous]
+    [EnableRateLimiting(AuthenticationRateLimitOptions.PolicyName)]
     [HttpPost("login")]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
     {

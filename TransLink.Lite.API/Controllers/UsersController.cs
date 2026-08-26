@@ -1,8 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using TransLink.Lite.Application.Auth.Interfaces;
 using TransLink.Lite.Application.Users.DTOs;
 using TransLink.Lite.Domain.Entities;
 using TransLink.Lite.Infrastructure.Persistence;
@@ -15,32 +13,10 @@ namespace TransLink.Lite.API.Controllers;
 public class UsersController : ControllerBase
 {
     private readonly AppDbContext _context;
-    private readonly IPasswordHasher _passwordHasher;
 
-    public UsersController(AppDbContext context, IPasswordHasher passwordHasher)
+    public UsersController(AppDbContext context)
     {
         _context = context;
-        _passwordHasher = passwordHasher;
-    }
-
-    [HttpGet]
-    public async Task<ActionResult<List<UserResponse>>> GetUsers()
-    {
-        var users = await _context.Users.ToListAsync();
-
-        return Ok(users.Select(MapToResponse).ToList());
-    }
-
-    [HttpPost]
-    public async Task<ActionResult<UserResponse>> CreateUser(CreateUserRequest request)
-    {
-        var user = MapToEntity(request, _passwordHasher.HashPassword(request.Password));
-
-        _context.Users.Add(user);
-
-        await _context.SaveChangesAsync();
-
-        return Ok(MapToResponse(user));
     }
 
     [HttpGet("me")]
@@ -88,17 +64,6 @@ public class UsersController : ControllerBase
         var claimValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return Guid.TryParse(claimValue, out userId);
     }
-
-    private static User MapToEntity(CreateUserRequest request, string passwordHash) => new()
-    {
-        Id = Guid.NewGuid(),
-        FirstName = request.FirstName,
-        LastName = request.LastName,
-        Email = request.Email,
-        PasswordHash = passwordHash,
-        PreferredLanguage = request.PreferredLanguage,
-        CreatedAt = DateTime.UtcNow,
-    };
 
     private static UserResponse MapToResponse(User user) => new()
     {
