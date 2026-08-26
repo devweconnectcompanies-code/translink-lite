@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using TransLink.Lite.API.Configuration;
 using TransLink.Lite.Application.Auth.DTOs;
 using TransLink.Lite.Application.Auth.Interfaces;
+using TransLink.Lite.Application.Common.Languages;
+using TransLink.Lite.Application.Common.Normalization;
 using TransLink.Lite.Domain.Entities;
 using TransLink.Lite.Infrastructure.Persistence;
 
@@ -33,7 +35,9 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
     {
-        var emailExists = await _context.Users.AnyAsync(u => u.Email == request.Email);
+        var normalizedEmail = EmailNormalizer.Normalize(request.Email);
+        var emailExists = await _context.Users
+            .AnyAsync(u => u.Email.Trim().ToLower() == normalizedEmail);
         if (emailExists)
         {
             return Conflict(new { message = "Email is already registered." });
@@ -42,11 +46,11 @@ public class AuthController : ControllerBase
         var user = new User
         {
             Id = Guid.NewGuid(),
-            FirstName = request.FirstName,
-            LastName = request.LastName,
-            Email = request.Email,
+            FirstName = request.FirstName.Trim(),
+            LastName = request.LastName.Trim(),
+            Email = request.Email.Trim(),
             PasswordHash = _passwordHasher.HashPassword(request.Password),
-            PreferredLanguage = request.PreferredLanguage,
+            PreferredLanguage = SupportedLanguageCatalog.Normalize(request.PreferredLanguage),
             CreatedAt = DateTime.UtcNow,
         };
 
@@ -61,7 +65,9 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
     {
-        var user = await _context.Users.SingleOrDefaultAsync(u => u.Email == request.Email);
+        var normalizedEmail = EmailNormalizer.Normalize(request.Email);
+        var user = await _context.Users
+            .SingleOrDefaultAsync(u => u.Email.Trim().ToLower() == normalizedEmail);
         if (user is null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
         {
             return Unauthorized(new { message = "Invalid email or password." });

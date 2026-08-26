@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using TransLink.Lite.Application.Common.Languages;
 using TransLink.Lite.Application.Users.DTOs;
 using TransLink.Lite.Domain.Entities;
 using TransLink.Lite.Infrastructure.Persistence;
@@ -50,9 +51,9 @@ public class UsersController : ControllerBase
             return NotFound();
         }
 
-        user.FirstName = request.FirstName;
-        user.LastName = request.LastName;
-        user.PreferredLanguage = request.PreferredLanguage;
+        user.FirstName = request.FirstName.Trim();
+        user.LastName = request.LastName.Trim();
+        user.PreferredLanguage = SupportedLanguageCatalog.Normalize(request.PreferredLanguage);
 
         await _context.SaveChangesAsync();
 

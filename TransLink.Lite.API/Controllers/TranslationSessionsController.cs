@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using TransLink.Lite.Application.Common.Languages;
 using TransLink.Lite.Application.TranslationSessions.DTOs;
 using TransLink.Lite.Domain.Entities;
 using TransLink.Lite.Infrastructure.Persistence;
@@ -82,9 +83,9 @@ public class TranslationSessionsController : ControllerBase
     {
         Id = Guid.NewGuid(),
         UserId = userId,
-        Title = request.Title,
-        SourceLanguage = request.SourceLanguage,
-        TargetLanguage = request.TargetLanguage,
+        Title = request.Title.Trim(),
+        SourceLanguage = SupportedLanguageCatalog.Normalize(request.SourceLanguage),
+        TargetLanguage = SupportedLanguageCatalog.Normalize(request.TargetLanguage),
         Status = "Draft",
         CreatedAt = DateTime.UtcNow,
     };
