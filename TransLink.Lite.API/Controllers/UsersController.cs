@@ -1,10 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TransLink.Lite.Application.Common.Languages;
+using TransLink.Lite.Application.Users;
 using TransLink.Lite.Application.Users.DTOs;
-using TransLink.Lite.Domain.Entities;
-using TransLink.Lite.Infrastructure.Persistence;
 
 namespace TransLink.Lite.API.Controllers;
 
@@ -13,51 +11,37 @@ namespace TransLink.Lite.API.Controllers;
 [Route("api/[controller]")]
 public class UsersController : ControllerBase
 {
-    private readonly AppDbContext _context;
+    private readonly IUserProfileService _userProfileService;
 
-    public UsersController(AppDbContext context)
+    public UsersController(IUserProfileService userProfileService)
     {
-        _context = context;
+        _userProfileService = userProfileService;
     }
 
     [HttpGet("me")]
-    public async Task<ActionResult<UserResponse>> GetCurrentUser()
+    public async Task<ActionResult<UserResponse>> GetCurrentUser(CancellationToken cancellationToken)
     {
         if (!TryGetCurrentUserId(out var userId))
         {
             return Unauthorized();
         }
 
-        var user = await _context.Users.FindAsync(userId);
-        if (user is null)
-        {
-            return NotFound();
-        }
-
-        return Ok(MapToResponse(user));
+        var response = await _userProfileService.GetAsync(userId, cancellationToken);
+        return response is null ? NotFound() : Ok(response);
     }
 
     [HttpPut("me")]
-    public async Task<ActionResult<UserResponse>> UpdateCurrentUser(UpdateUserProfileRequest request)
+    public async Task<ActionResult<UserResponse>> UpdateCurrentUser(
+        UpdateUserProfileRequest request,
+        CancellationToken cancellationToken)
     {
         if (!TryGetCurrentUserId(out var userId))
         {
             return Unauthorized();
         }
 
-        var user = await _context.Users.FindAsync(userId);
-        if (user is null)
-        {
-            return NotFound();
-        }
-
-        user.FirstName = request.FirstName.Trim();
-        user.LastName = request.LastName.Trim();
-        user.PreferredLanguage = SupportedLanguageCatalog.Normalize(request.PreferredLanguage);
-
-        await _context.SaveChangesAsync();
-
-        return Ok(MapToResponse(user));
+        var response = await _userProfileService.UpdateAsync(userId, request, cancellationToken);
+        return response is null ? NotFound() : Ok(response);
     }
 
     private bool TryGetCurrentUserId(out Guid userId)
@@ -65,14 +49,4 @@ public class UsersController : ControllerBase
         var claimValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return Guid.TryParse(claimValue, out userId);
     }
-
-    private static UserResponse MapToResponse(User user) => new()
-    {
-        Id = user.Id,
-        FirstName = user.FirstName,
-        LastName = user.LastName,
-        Email = user.Email,
-        PreferredLanguage = user.PreferredLanguage,
-        CreatedAt = user.CreatedAt,
-    };
 }

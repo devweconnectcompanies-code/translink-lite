@@ -8,8 +8,12 @@ using Microsoft.OpenApi;
 using TransLink.Lite.API.Configuration;
 using TransLink.Lite.Application.Auth;
 using TransLink.Lite.Application.Auth.Interfaces;
+using TransLink.Lite.Application.Common.Persistence;
+using TransLink.Lite.Application.TranslationSessions;
+using TransLink.Lite.Application.Users;
 using TransLink.Lite.Infrastructure.Auth;
 using TransLink.Lite.Infrastructure.Persistence;
+using TransLink.Lite.Infrastructure.Persistence.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +53,11 @@ builder.Services.AddOptions<JwtSettings>()
 
 builder.Services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IUserProfileService, UserProfileService>();
+builder.Services.AddScoped<ITranslationSessionService, TranslationSessionService>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<ITranslationSessionRepository, TranslationSessionRepository>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>

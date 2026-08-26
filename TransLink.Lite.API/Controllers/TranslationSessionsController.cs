@@ -1,11 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using TransLink.Lite.Application.Common.Languages;
+using TransLink.Lite.Application.TranslationSessions;
 using TransLink.Lite.Application.TranslationSessions.DTOs;
-using TransLink.Lite.Domain.Entities;
-using TransLink.Lite.Infrastructure.Persistence;
 
 namespace TransLink.Lite.API.Controllers;
 
@@ -14,63 +11,55 @@ namespace TransLink.Lite.API.Controllers;
 [Route("api/[controller]")]
 public class TranslationSessionsController : ControllerBase
 {
-    private readonly AppDbContext _context;
+    private readonly ITranslationSessionService _translationSessionService;
 
-    public TranslationSessionsController(AppDbContext context)
+    public TranslationSessionsController(ITranslationSessionService translationSessionService)
     {
-        _context = context;
+        _translationSessionService = translationSessionService;
     }
 
     [HttpPost]
     public async Task<ActionResult<TranslationSessionResponse>> CreateTranslationSession(
-        CreateTranslationSessionRequest request)
+        CreateTranslationSessionRequest request,
+        CancellationToken cancellationToken)
     {
         if (!TryGetCurrentUserId(out var userId))
         {
             return Unauthorized();
         }
 
-        var session = MapToEntity(request, userId);
+        var response = await _translationSessionService.CreateAsync(
+            userId,
+            request,
+            cancellationToken);
 
-        _context.TranslationSessions.Add(session);
-        await _context.SaveChangesAsync();
-
-        return Ok(MapToResponse(session));
+        return Ok(response);
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<TranslationSessionResponse>>> GetTranslationSessions()
+    public async Task<ActionResult<List<TranslationSessionResponse>>> GetTranslationSessions(
+        CancellationToken cancellationToken)
     {
         if (!TryGetCurrentUserId(out var userId))
         {
             return Unauthorized();
         }
 
-        var sessions = await _context.TranslationSessions
-            .Where(s => s.UserId == userId)
-            .OrderByDescending(s => s.CreatedAt)
-            .ToListAsync();
-
-        return Ok(sessions.Select(MapToResponse).ToList());
+        return Ok(await _translationSessionService.GetByUserIdAsync(userId, cancellationToken));
     }
 
     [HttpGet("{id:guid}")]
-    public async Task<ActionResult<TranslationSessionResponse>> GetTranslationSession(Guid id)
+    public async Task<ActionResult<TranslationSessionResponse>> GetTranslationSession(
+        Guid id,
+        CancellationToken cancellationToken)
     {
         if (!TryGetCurrentUserId(out var userId))
         {
             return Unauthorized();
         }
 
-        var session = await _context.TranslationSessions
-            .SingleOrDefaultAsync(s => s.Id == id && s.UserId == userId);
-
-        if (session is null)
-        {
-            return NotFound();
-        }
-
-        return Ok(MapToResponse(session));
+        var response = await _translationSessionService.GetByIdAsync(id, userId, cancellationToken);
+        return response is null ? NotFound() : Ok(response);
     }
 
     private bool TryGetCurrentUserId(out Guid userId)
@@ -78,28 +67,4 @@ public class TranslationSessionsController : ControllerBase
         var claimValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
         return Guid.TryParse(claimValue, out userId);
     }
-
-    private static TranslationSession MapToEntity(CreateTranslationSessionRequest request, Guid userId) => new()
-    {
-        Id = Guid.NewGuid(),
-        UserId = userId,
-        Title = request.Title.Trim(),
-        SourceLanguage = SupportedLanguageCatalog.Normalize(request.SourceLanguage),
-        TargetLanguage = SupportedLanguageCatalog.Normalize(request.TargetLanguage),
-        Status = "Draft",
-        CreatedAt = DateTime.UtcNow,
-    };
-
-    private static TranslationSessionResponse MapToResponse(TranslationSession session) => new()
-    {
-        Id = session.Id,
-        UserId = session.UserId,
-        Title = session.Title,
-        SourceLanguage = session.SourceLanguage,
-        TargetLanguage = session.TargetLanguage,
-        Status = session.Status,
-        CreatedAt = session.CreatedAt,
-        StartedAt = session.StartedAt,
-        EndedAt = session.EndedAt,
-    };
 }

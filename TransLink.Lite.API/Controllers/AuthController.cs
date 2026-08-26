@@ -1,14 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using TransLink.Lite.API.Configuration;
+using TransLink.Lite.Application.Auth;
 using TransLink.Lite.Application.Auth.DTOs;
-using TransLink.Lite.Application.Auth.Interfaces;
-using TransLink.Lite.Application.Common.Languages;
-using TransLink.Lite.Application.Common.Normalization;
-using TransLink.Lite.Domain.Entities;
-using TransLink.Lite.Infrastructure.Persistence;
 
 namespace TransLink.Lite.API.Controllers;
 
@@ -16,74 +11,42 @@ namespace TransLink.Lite.API.Controllers;
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
-    private readonly AppDbContext _context;
-    private readonly IPasswordHasher _passwordHasher;
-    private readonly IJwtTokenService _jwtTokenService;
+    private readonly IAuthService _authService;
 
-    public AuthController(
-        AppDbContext context,
-        IPasswordHasher passwordHasher,
-        IJwtTokenService jwtTokenService)
+    public AuthController(IAuthService authService)
     {
-        _context = context;
-        _passwordHasher = passwordHasher;
-        _jwtTokenService = jwtTokenService;
+        _authService = authService;
     }
 
     [AllowAnonymous]
     [EnableRateLimiting(AuthenticationRateLimitOptions.PolicyName)]
     [HttpPost("register")]
-    public async Task<ActionResult<AuthResponse>> Register(RegisterRequest request)
+    public async Task<ActionResult<AuthResponse>> Register(
+        RegisterRequest request,
+        CancellationToken cancellationToken)
     {
-        var normalizedEmail = EmailNormalizer.Normalize(request.Email);
-        var emailExists = await _context.Users
-            .AnyAsync(u => u.NormalizedEmail == normalizedEmail);
-        if (emailExists)
+        var response = await _authService.RegisterAsync(request, cancellationToken);
+        if (response is null)
         {
             return Conflict(new { message = "Email is already registered." });
         }
 
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            FirstName = request.FirstName.Trim(),
-            LastName = request.LastName.Trim(),
-            Email = request.Email.Trim(),
-            NormalizedEmail = normalizedEmail,
-            PasswordHash = _passwordHasher.HashPassword(request.Password),
-            PreferredLanguage = SupportedLanguageCatalog.Normalize(request.PreferredLanguage),
-            CreatedAt = DateTime.UtcNow,
-        };
-
-        _context.Users.Add(user);
-        await _context.SaveChangesAsync();
-
-        return Ok(MapToAuthResponse(user, _jwtTokenService.GenerateAccessToken(user)));
+        return Ok(response);
     }
 
     [AllowAnonymous]
     [EnableRateLimiting(AuthenticationRateLimitOptions.PolicyName)]
     [HttpPost("login")]
-    public async Task<ActionResult<AuthResponse>> Login(LoginRequest request)
+    public async Task<ActionResult<AuthResponse>> Login(
+        LoginRequest request,
+        CancellationToken cancellationToken)
     {
-        var normalizedEmail = EmailNormalizer.Normalize(request.Email);
-        var user = await _context.Users
-            .SingleOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail);
-        if (user is null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
+        var response = await _authService.LoginAsync(request, cancellationToken);
+        if (response is null)
         {
             return Unauthorized(new { message = "Invalid email or password." });
         }
 
-        return Ok(MapToAuthResponse(user, _jwtTokenService.GenerateAccessToken(user)));
+        return Ok(response);
     }
-
-    private static AuthResponse MapToAuthResponse(User user, string accessToken) => new()
-    {
-        UserId = user.Id,
-        Email = user.Email,
-        FirstName = user.FirstName,
-        LastName = user.LastName,
-        PreferredLanguage = user.PreferredLanguage,
-        AccessToken = accessToken,
-    };
 }
