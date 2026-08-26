@@ -37,7 +37,7 @@ public class AuthController : ControllerBase
     {
         var normalizedEmail = EmailNormalizer.Normalize(request.Email);
         var emailExists = await _context.Users
-            .AnyAsync(u => u.Email.Trim().ToLower() == normalizedEmail);
+            .AnyAsync(u => u.NormalizedEmail == normalizedEmail);
         if (emailExists)
         {
             return Conflict(new { message = "Email is already registered." });
@@ -49,6 +49,7 @@ public class AuthController : ControllerBase
             FirstName = request.FirstName.Trim(),
             LastName = request.LastName.Trim(),
             Email = request.Email.Trim(),
+            NormalizedEmail = normalizedEmail,
             PasswordHash = _passwordHasher.HashPassword(request.Password),
             PreferredLanguage = SupportedLanguageCatalog.Normalize(request.PreferredLanguage),
             CreatedAt = DateTime.UtcNow,
@@ -67,7 +68,7 @@ public class AuthController : ControllerBase
     {
         var normalizedEmail = EmailNormalizer.Normalize(request.Email);
         var user = await _context.Users
-            .SingleOrDefaultAsync(u => u.Email.Trim().ToLower() == normalizedEmail);
+            .SingleOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail);
         if (user is null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
         {
             return Unauthorized(new { message = "Invalid email or password." });

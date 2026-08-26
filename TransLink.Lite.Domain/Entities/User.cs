@@ -10,9 +10,13 @@ public class User
 
     public string Email { get; set; } = string.Empty;
 
+    public string NormalizedEmail { get; set; } = string.Empty;
+
     public string PasswordHash { get; set; } = string.Empty;
 
     public string PreferredLanguage { get; set; } = "en";
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<TranslationSession> TranslationSessions { get; } = [];
 }
