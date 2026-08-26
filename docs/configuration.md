@@ -90,6 +90,20 @@ RateLimiting__Authentication__QueueLimit
 
 This limiter stores counters in the API process. It is suitable for the current single-instance baseline, but it does not provide a global limit across multiple backend instances. A trusted proxy configuration and a distributed rate-limiting strategy must be introduced before horizontal deployment.
 
+## Health endpoints
+
+The API exposes anonymous, minimal health probes:
+
+| Endpoint | Purpose | Dependencies |
+|---|---|---|
+| `/health` | Temporary compatibility alias for liveness | Process only |
+| `/health/live` | Confirms that the API process can respond | Process only |
+| `/health/ready` | Confirms that the instance can receive application traffic | PostgreSQL |
+
+Healthy checks return HTTP `200`. Readiness returns HTTP `503` for both `Degraded` and `Unhealthy` states because PostgreSQL is currently a critical dependency. Responses contain only the aggregate health status and never expose connection or exception details.
+
+In a future AWS deployment, container/process liveness should use `/health/live`, while load balancer target health and traffic readiness should use `/health/ready`.
+
 ## Startup behavior
 
 The API fails fast with a safe configuration error when:

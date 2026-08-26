@@ -2,12 +2,15 @@ using System.Diagnostics;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using TransLink.Lite.API.Configuration;
 using TransLink.Lite.API.ErrorHandling;
+using TransLink.Lite.API.HealthChecks;
 using TransLink.Lite.Application.Auth;
 using TransLink.Lite.Application.Auth.Interfaces;
 using TransLink.Lite.Application.Common.Persistence;
@@ -89,6 +92,16 @@ builder.Services.AddProblemDetails(options =>
 });
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
+builder.Services.AddHealthChecks()
+    .AddCheck(
+        "self",
+        () => HealthCheckResult.Healthy(),
+        tags: ["live"])
+    .AddCheck<PostgreSqlHealthCheck>(
+        "postgresql",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["ready"]);
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -143,14 +156,26 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-app.MapGet("/health", () => Results.Ok(new
-{
-    status = "Healthy",
-    service = "TransLink Lite API",
-    timestamp = DateTime.UtcNow
-}));
+app.MapHealthChecks("/health", CreateHealthCheckOptions("live"))
+    .AllowAnonymous();
+app.MapHealthChecks("/health/live", CreateHealthCheckOptions("live"))
+    .AllowAnonymous();
+app.MapHealthChecks("/health/ready", CreateHealthCheckOptions("ready"))
+    .AllowAnonymous();
 
 app.Run();
+
+static HealthCheckOptions CreateHealthCheckOptions(string tag) => new()
+{
+    Predicate = registration => registration.Tags.Contains(tag),
+    ResponseWriter = HealthCheckResponseWriter.WriteAsync,
+    ResultStatusCodes =
+    {
+        [HealthStatus.Healthy] = StatusCodes.Status200OK,
+        [HealthStatus.Degraded] = StatusCodes.Status503ServiceUnavailable,
+        [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable,
+    },
+};
 
 static void ValidateJwtSettings(JwtSettings settings)
 {
