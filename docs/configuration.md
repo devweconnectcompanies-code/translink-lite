@@ -113,9 +113,14 @@ The API fails fast with a safe configuration error when:
 - `Jwt:Audience` is missing;
 - `Jwt:SecretKey` is missing or shorter than 32 bytes;
 - `Jwt:ExpirationMinutes` is not greater than zero.
+- `RateLimiting:Authentication:PermitLimit` is not greater than zero;
+- `RateLimiting:Authentication:WindowSeconds` is not greater than zero;
+- `RateLimiting:Authentication:QueueLimit` is negative.
 
 Validation errors identify the missing configuration key but never include its value.
 
-## Credential rotation
+## Credential rotation record
 
-The PostgreSQL password and JWT signing key that were previously committed must be treated as compromised. Their owner must rotate them manually. Rotating the JWT signing key invalidates tokens signed with the previous key.
+The PostgreSQL password and JWT signing key exposed before the baseline were rotated during `BASELINE-001B`. They are no longer present in tracked current-source configuration. The historical exposure remains in Git history; removing it from existing objects and clones requires a separately approved history-rewrite procedure.
+
+Future rotation must occur in the owning database and deployment systems first, followed by User Secrets or the environment's secret manager. Rotating the JWT signing key invalidates tokens signed with the previous key.

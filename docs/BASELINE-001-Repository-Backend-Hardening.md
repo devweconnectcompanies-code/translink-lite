@@ -2,7 +2,7 @@
 
 **Proyecto:** TransLink-Lite<br>
 **Prioridad:** P0/P1<br>
-**Estado:** Ready for planning<br>
+**Estado:** Completed and published (2026-08-30)<br>
 **Objetivo:** dejar el repositorio y backend en una base segura, reproducible y mantenible antes de implementar audio realtime y AWS.
 
 ---
@@ -294,3 +294,26 @@ Entrega:
 8. cualquier decisión que requiera aprobación.
 
 Después de revisar ese plan se autorizará la primera subfase.
+
+---
+
+## 7. Completion record
+
+`BASELINE-001` was executed incrementally, reviewed by subphase, published to `main`, and validated by a real GitHub Actions run. The original specification above is retained as the historical execution contract.
+
+Completed outcomes:
+
+- Git hygiene removed generated build artifacts from tracking and established repository-wide ignores.
+- Tracked current-source secrets were removed; exposed PostgreSQL and JWT credentials were rotated; local development uses .NET User Secrets.
+- `global.json` pins SDK `10.0.300` with compatible patch servicing within the `10.0.3xx` feature band.
+- The vulnerable transitive `Microsoft.OpenApi 2.4.1` dependency was removed through a compatible Swashbuckle update.
+- Users collection endpoints were removed; profile and session access is authenticated and ownership-scoped.
+- Validation, normalized email handling, DTO boundaries, PostgreSQL constraints, and specific EF Core configurations are implemented.
+- Controllers are thin adapters over application services and specific repository abstractions.
+- Global `ProblemDetails`, authentication rate limiting, and separate liveness/readiness probes are implemented.
+- The approved automated baseline is 30 unit tests plus 26 PostgreSQL/Testcontainers integration tests (56 total, none skipped).
+- GitHub Actions restores, audits dependencies, builds Release, and runs all tests; the first published run succeeded.
+- The approved top-level `API`, `APP`, `Tests`, `docs`, and root-solution layout is in place with history preserved.
+- Documentation was reconciled in `BASELINE-001N`.
+
+Intentionally deferred: realtime audio, WebSockets, AWS services, Extension integration, distributed infrastructure, billing, calls, and enterprise capabilities. The next milestone is `EXT-001`, beginning with `EXT-001A — Chrome Integration Foundation`.

@@ -1,199 +1,128 @@
-# TransLink Lite — Backend Architecture
+# TransLink Lite backend architecture
 
-## Overview
+This document describes the implemented backend baseline. Product direction and planned capabilities are documented in `TRANSLINK-MASTER-v0.4.md`.
 
-TransLink Lite is a .NET 10 Web API organized in four projects under `API/`. The API exposes user management and JWT-based authentication against a PostgreSQL database via Entity Framework Core.
+## Repository layout
 
-## Solution structure
-
-```
-API/
-├── TransLink.Lite.API/              # HTTP host, controllers, composition root
-├── TransLink.Lite.Application/      # DTOs, auth contracts, JWT settings
-├── TransLink.Lite.Domain/           # Domain entities
-└── TransLink.Lite.Infrastructure/   # EF Core, migrations, auth implementations
-```
-
-## Project references
-
-| Project | References |
-|---------|------------|
-| **API** | Application, Infrastructure |
-| **Application** | Domain |
-| **Infrastructure** | Application, Domain |
-| **Domain** | *(none)* |
-
-Dependency flow (inward):
-
-```
-API ──────────────┬──► Application ──► Domain
-                  └──► Infrastructure ──► Application
-                                    └──► Domain
+```text
+TransLink-Lite/
+├── API/
+│   ├── TransLink.Lite.API/
+│   ├── TransLink.Lite.Application/
+│   ├── TransLink.Lite.Domain/
+│   └── TransLink.Lite.Infrastructure/
+├── APP/
+│   ├── Extension/
+│   └── Web/
+├── Tests/
+│   ├── TransLink.Lite.UnitTests/
+│   └── TransLink.Lite.IntegrationTests/
+├── docs/
+├── .github/workflows/backend-ci.yml
+├── global.json
+└── TransLink.Lite.slnx
 ```
 
-The API does **not** reference Domain directly. Controllers currently use `AppDbContext` from Infrastructure for data access (pragmatic setup; application services can be introduced later).
+The repository is a modular-monolith baseline. It does not yet contain realtime audio transport or AWS translation services.
 
-All four projects have `<Nullable>enable</Nullable>`.
+## Projects and dependencies
 
-## Layers
+| Project | Responsibility | Direct project references |
+|---|---|---|
+| `TransLink.Lite.Domain` | Domain entities | None |
+| `TransLink.Lite.Application` | Use-case orchestration, DTOs, validation, and persistence/authentication abstractions | Domain |
+| `TransLink.Lite.Infrastructure` | EF Core/PostgreSQL, repositories, JWT creation, and BCrypt hashing | Application, Domain |
+| `TransLink.Lite.API` | HTTP transport, composition root, middleware, authentication, rate limiting, and health probes | Application, Infrastructure |
 
-### Domain (`TransLink.Lite.Domain`)
-
-- **`User`** — `Id`, `FirstName`, `LastName`, `Email`, `PasswordHash`, `PreferredLanguage`, `CreatedAt`
-
-### Application (`TransLink.Lite.Application`)
-
-**User DTOs** (`Users/DTOs/`):
-
-| Type | Purpose |
-|------|---------|
-| `CreateUserRequest` | Protected user creation (`POST /api/Users`) |
-| `UserResponse` | User API responses (no password fields) |
-
-**Auth DTOs** (`Auth/DTOs/`):
-
-| Type | Purpose |
-|------|---------|
-| `RegisterRequest` | Public registration |
-| `LoginRequest` | Public login |
-| `AuthResponse` | Auth responses including JWT |
-
-**Contracts** (`Auth/Interfaces/`):
-
-| Interface | Methods |
-|-----------|---------|
-| `IPasswordHasher` | `HashPassword`, `VerifyPassword` |
-| `IJwtTokenService` | `GenerateAccessToken(User)` |
-
-**Configuration:**
-
-- `JwtSettings` — bound from `Jwt` section in configuration (`Issuer`, `Audience`, `SecretKey`, `ExpirationMinutes`)
-
-### Infrastructure (`TransLink.Lite.Infrastructure`)
-
-| Component | Role |
-|-----------|------|
-| `AppDbContext` | EF Core `DbSet<User>` |
-| `BCryptPasswordHasher` | `IPasswordHasher` via BCrypt.Net-Next |
-| `JwtTokenService` | HS256 JWT generation |
-| `Migrations/` | PostgreSQL schema history |
-
-### API (`TransLink.Lite.API`)
-
-**Controllers:**
-
-| Controller | Route | Auth | Actions |
-|------------|-------|------|---------|
-| `AuthController` | `api/auth` | Public | `POST register`, `POST login` |
-| `UsersController` | `api/Users` | `[Authorize]` | `GET`, `POST` |
-
-**Minimal endpoint:**
-
-| Route | Auth | Description |
-|-------|------|-------------|
-| `GET /health` | Public | Health check |
-
-## Authentication
-
-### Registration (`POST /api/auth/register`)
-
-1. Reject duplicate email (`409 Conflict`)
-2. Hash password with `IPasswordHasher`
-3. Persist `User`
-4. Return `AuthResponse` with JWT
-
-### Login (`POST /api/auth/login`)
-
-1. Load user by email
-2. Verify password with `IPasswordHasher`
-3. On failure → `401 Unauthorized`
-4. Return `AuthResponse` with JWT
-
-### Protected routes
-
-`UsersController` requires a valid Bearer JWT. Swagger is configured with a Bearer security definition (OpenAPI 2 / Swashbuckle 10).
-
-### JWT configuration
-
-Loaded from `appsettings.Development.json` under `Jwt`:
-
-```json
-{
-  "Jwt": {
-    "Issuer": "TransLink.Lite",
-    "Audience": "TransLink.Lite.Client",
-    "SecretKey": "...",
-    "ExpirationMinutes": 60
-  }
-}
+```text
+API ──────────────┬──> Application ──> Domain
+                  └──> Infrastructure ──> Application
+                                      └──> Domain
 ```
 
-`Program.cs` binds `JwtSettings`, validates at startup, and configures `JwtBearer` with the same issuer, audience, and signing key.
+Domain has no dependency on ASP.NET Core, EF Core, Infrastructure, or API. Controllers do not access `AppDbContext`; they call application-service interfaces. Repository interfaces are defined in Application and implemented in Infrastructure.
 
-**Note:** JWT settings are defined in Development configuration only. Running outside Development requires the same `Jwt` section in the active configuration or startup will fail.
+## Domain model
 
-### Password hashing
+`User` persists `Id`, profile names, `Email`, `NormalizedEmail`, `PasswordHash`, `PreferredLanguage`, `CreatedAt`, and its owned sessions. `NormalizedEmail`, rather than display `Email`, is used for identity lookup and uniqueness.
 
-`BCryptPasswordHasher` delegates to `BCrypt.Net.BCrypt.HashPassword` and `Verify`. Used by `AuthController` and `UsersController` when creating users.
+`TranslationSession` persists `Id`, `UserId`, `Title`, source and target languages, `Status`, timestamps, and a required `User` navigation. It currently represents session metadata, not an audio stream, transcript, or translation pipeline.
 
-## Dependency injection (`Program.cs`)
+## Application layer
 
-| Service | Lifetime | Implementation |
-|---------|----------|----------------|
-| `AppDbContext` | Scoped | EF Core + Npgsql |
-| `JwtSettings` | Options | `Configure<JwtSettings>` from `Jwt` section |
-| `IPasswordHasher` | Singleton | `BCryptPasswordHasher` |
-| `IJwtTokenService` | Singleton | `JwtTokenService` |
-| Authentication | — | JWT Bearer |
-| Authorization | — | ASP.NET Core default |
+| Service | Implemented responsibilities |
+|---|---|
+| `AuthService` | Register, normalize email, enforce uniqueness, hash passwords, authenticate, and issue tokens |
+| `UserProfileService` | Read and update the authenticated user's profile |
+| `TranslationSessionService` | Create and retrieve sessions owned by the authenticated user |
 
-Middleware order: `UseAuthentication` → `UseAuthorization` → `MapControllers`.
+Persistence abstractions are specific: `IUserRepository` and `ITranslationSessionRepository`. No generic repository abstraction is used. Request and response DTOs prevent binding domain entities directly and do not expose `UserId`, `PasswordHash`, or `NormalizedEmail` as user-controlled fields.
 
-## API endpoints summary
+### Validation and normalization
 
-| Method | Path | Auth | Request | Response |
-|--------|------|------|---------|----------|
-| `GET` | `/health` | — | — | `{ status, service, timestamp }` |
-| `POST` | `/api/auth/register` | — | `RegisterRequest` | `AuthResponse` |
-| `POST` | `/api/auth/login` | — | `LoginRequest` | `AuthResponse` |
-| `GET` | `/api/Users` | Bearer | — | `List<UserResponse>` |
-| `POST` | `/api/Users` | Bearer | `CreateUserRequest` | `UserResponse` |
+The baseline uses native data annotations, custom attributes, and application-level checks. It includes centralized trim/invariant-lowercase email normalization, syntactic email validation, password length from 12 through 128 characters, bounded profile names and session titles, supported-language validation, and rejection of equal source and target languages.
 
-## Controller conventions
+The provisional `SupportedLanguageCatalog` contains `en` and `es`. It is intentionally small and structured for later replacement by a capability-aware catalog; it is not the final AWS language matrix.
 
-All controller actions are **async** (`Task<ActionResult<...>>`) and use EF Core async APIs (`ToListAsync`, `SaveChangesAsync`, `AnyAsync`, `SingleOrDefaultAsync`).
+## Infrastructure and PostgreSQL
 
-## Database
+`AppDbContext` applies mappings from the Infrastructure assembly through `ApplyConfigurationsFromAssembly`.
 
-- **Provider:** PostgreSQL (Npgsql)
-- **Connection string:** `ConnectionStrings:DefaultConnection` in `appsettings.Development.json`
-- **Migrations:** `API/TransLink.Lite.Infrastructure/Migrations/`
+`UserConfiguration` enforces these maximum lengths: `FirstName` 100, `LastName` 100, `Email` 254, `NormalizedEmail` 254, `PasswordHash` 255, and `PreferredLanguage` 35. It creates the unique index `IX_Users_NormalizedEmail`.
 
-## NuGet packages (high level)
+`TranslationSessionConfiguration` enforces: `Title` 200, `SourceLanguage` 35, `TargetLanguage` 35, and `Status` 32. It creates an index on `UserId` and configures the required relationship `TranslationSession.UserId -> User.Id` with `DeleteBehavior.Restrict`.
 
-| Project | Notable packages |
-|---------|------------------|
-| API | `JwtBearer`, `Swashbuckle`, `EF Core Design`, `Npgsql` |
-| Infrastructure | `BCrypt.Net-Next`, `System.IdentityModel.Tokens.Jwt`, `EF Core`, `Npgsql` |
-| Application | *(project references only)* |
-| Domain | *(none)* |
+`UserRepository` and `TranslationSessionRepository` use EF Core asynchronous APIs and cancellation tokens. Session queries include the authenticated user's ID, enforcing ownership at the data-access boundary.
 
-## Local development
+Five migrations are tracked. The latest is `StrengthenUserAndTranslationSessionIntegrity`, which introduced normalized-email persistence, bounded fields, the unique email index, the session index, and the required foreign key. Migrations are not applied automatically at API startup.
 
-```bash
-cd API/TransLink.Lite.API
-dotnet run
-```
+## HTTP API
 
-- HTTP: `http://localhost:5221` (see `Properties/launchSettings.json`)
-- Swagger UI: enabled in Development
-- Sample HTTP requests: `TransLink.Lite.API.http` (`GET /health`)
+Controllers are thin adapters: they obtain the authenticated user identifier, invoke an application service, and translate the result to HTTP.
 
-## Cleanup notes (maintenance)
+| Method | Route | Access | Purpose |
+|---|---|---|---|
+| `POST` | `/api/auth/register` | Anonymous, rate limited | Register and return a JWT |
+| `POST` | `/api/auth/login` | Anonymous, rate limited | Authenticate and return a JWT |
+| `GET` | `/api/Users/me` | Bearer JWT | Get the authenticated profile |
+| `PUT` | `/api/Users/me` | Bearer JWT | Update the authenticated profile |
+| `POST` | `/api/TranslationSessions` | Bearer JWT | Create an owned session |
+| `GET` | `/api/TranslationSessions` | Bearer JWT | List owned sessions |
+| `GET` | `/api/TranslationSessions/{id}` | Bearer JWT | Get one owned session |
+| `GET` | `/health` | Anonymous | Temporary liveness compatibility alias |
+| `GET` | `/health/live` | Anonymous | Process liveness |
+| `GET` | `/health/ready` | Anonymous | PostgreSQL readiness |
 
-Removed template artifacts:
+The former collection-level `GET /api/Users` and `POST /api/Users` endpoints have been removed.
 
-- Empty `Class1.cs` placeholder classes (Application, Domain, Infrastructure)
-- `TransLink.Lite.API.http` sample `weatherforecast` request (no WeatherForecast controller exists)
+## Security behavior
 
-No `WeatherForecast` types remain in the solution. All Application DTOs are referenced by controllers.
+- Passwords are hashed and verified with BCrypt.
+- JWT validation checks issuer, audience, lifetime, and the symmetric signing key.
+- JWT settings and required configuration are validated at startup.
+- Profile and session endpoints require authentication.
+- The server derives the user from JWT claims; clients cannot assign ownership.
+- Session reads return `404` for missing and non-owned resources.
+- Register/login share a fixed-window, per-client-IP rate limit.
+
+The in-process limiter is suitable for the current single-instance baseline. Horizontal deployment requires trusted-proxy handling and distributed enforcement.
+
+## Errors and health
+
+ASP.NET Core `ProblemDetails` is the public error contract. The global handler maps validation to `400`, authentication failure to `401`, missing/non-owned resources to `404`, normalized-email conflicts to `409`, and unexpected failures to a generic `500`. Responses include `traceId` without SQL details, stack traces, secrets, or internal exception messages.
+
+Liveness checks only the API process. Readiness checks PostgreSQL and returns `503` when it is unavailable while liveness remains healthy. Responses expose only aggregate status.
+
+## Configuration and secrets
+
+Tracked configuration contains only non-sensitive defaults. Local database credentials and the JWT signing key use .NET User Secrets; deployed environments must use their secret-management facility. See `configuration.md`.
+
+## Automated verification
+
+The solution contains 30 unit tests and 26 integration tests (56 total, none skipped in the approved baseline). Integration tests cover the HTTP API, PostgreSQL constraints, ownership, errors, health, and rate limiting using `WebApplicationFactory`, Testcontainers, PostgreSQL 17 Alpine, an ephemeral database, and real migrations. Guards prevent targeting `translink_lite_dev`.
+
+GitHub Actions runs on `ubuntu-latest` for pushes and pull requests to `main`, and manual dispatch. It resolves the SDK from `global.json`, restores, audits NuGet packages, builds Release, and runs the complete test suite. The first published baseline run succeeded.
+
+## Current boundaries
+
+Not yet implemented: Chrome tab/audio integration, WebSockets, realtime transport, AWS Transcribe/Translate/Polly, the audio/backpressure pipeline, distributed infrastructure, production cloud deployment, external observability, calls, billing, organizations, or enterprise modules.
