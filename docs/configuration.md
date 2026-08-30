@@ -2,7 +2,7 @@
 
 TransLink Lite does not store database credentials or JWT signing keys in tracked configuration files.
 
-The current Git root is the `backend/` directory. Run the commands in this document from that directory unless a command specifies otherwise.
+Run the commands in this document from the repository root unless a command specifies otherwise.
 
 ## .NET SDK and build
 
@@ -38,21 +38,21 @@ The JWT signing key must contain at least 32 bytes. Never reuse the example plac
 The API project has a `UserSecretsId`, so each developer can store local values outside the repository:
 
 ```bash
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "<YOUR_LOCAL_CONNECTION_STRING>" --project TransLink.Lite.API
-dotnet user-secrets set "Jwt:SecretKey" "<YOUR_LOCAL_JWT_SECRET>" --project TransLink.Lite.API
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "<YOUR_LOCAL_CONNECTION_STRING>" --project API/TransLink.Lite.API
+dotnet user-secrets set "Jwt:SecretKey" "<YOUR_LOCAL_JWT_SECRET>" --project API/TransLink.Lite.API
 ```
 
 List the configured keys without copying their values into tickets, logs, or documentation:
 
 ```bash
-dotnet user-secrets list --project TransLink.Lite.API
+dotnet user-secrets list --project API/TransLink.Lite.API
 ```
 
 Remove a local value when it is no longer needed:
 
 ```bash
-dotnet user-secrets remove "ConnectionStrings:DefaultConnection" --project TransLink.Lite.API
-dotnet user-secrets remove "Jwt:SecretKey" --project TransLink.Lite.API
+dotnet user-secrets remove "ConnectionStrings:DefaultConnection" --project API/TransLink.Lite.API
+dotnet user-secrets remove "Jwt:SecretKey" --project API/TransLink.Lite.API
 ```
 
 ## Configure with environment variables

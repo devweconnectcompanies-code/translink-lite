@@ -1,8 +1,8 @@
 <Solution>
-  <Project Path="TransLink.Lite.API/TransLink.Lite.API.csproj" />
-  <Project Path="TransLink.Lite.Application/TransLink.Lite.Application.csproj" />
-  <Project Path="TransLink.Lite.Domain/TransLink.Lite.Domain.csproj" />
-  <Project Path="TransLink.Lite.Infrastructure/TransLink.Lite.Infrastructure.csproj" />
-  <Project Path="TransLink.Lite.IntegrationTests/TransLink.Lite.IntegrationTests.csproj" />
-  <Project Path="TransLink.Lite.UnitTests/TransLink.Lite.UnitTests.csproj" />
+  <Project Path="API/TransLink.Lite.API/TransLink.Lite.API.csproj" />
+  <Project Path="API/TransLink.Lite.Application/TransLink.Lite.Application.csproj" />
+  <Project Path="API/TransLink.Lite.Domain/TransLink.Lite.Domain.csproj" />
+  <Project Path="API/TransLink.Lite.Infrastructure/TransLink.Lite.Infrastructure.csproj" />
+  <Project Path="Tests/TransLink.Lite.IntegrationTests/TransLink.Lite.IntegrationTests.csproj" />
+  <Project Path="Tests/TransLink.Lite.UnitTests/TransLink.Lite.UnitTests.csproj" />
 </Solution>
