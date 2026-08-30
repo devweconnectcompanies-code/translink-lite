@@ -222,3 +222,5 @@ static void ValidateAuthenticationRateLimit(AuthenticationRateLimitOptions setti
             "Required configuration 'RateLimiting:Authentication:QueueLimit' cannot be negative.");
     }
 }
+
+public partial class Program;
