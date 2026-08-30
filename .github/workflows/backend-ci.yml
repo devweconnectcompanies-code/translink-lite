@@ -1,0 +1,57 @@
+name: Backend CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Restore, build, test, and audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET SDK from global.json
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Verify .NET SDK resolution
+        run: dotnet --version
+
+      - name: Restore dependencies
+        run: dotnet restore TransLink.Lite.slnx
+
+      - name: Audit NuGet packages
+        shell: bash
+        run: |
+          report="${RUNNER_TEMP}/nuget-vulnerabilities.json"
+          dotnet list TransLink.Lite.slnx package --vulnerable --include-transitive --format json > "${report}"
+          jq . "${report}"
+
+          vulnerability_count="$(jq '[.. | objects | .vulnerabilities? // empty | .[]] | length' "${report}")"
+          if (( vulnerability_count > 0 )); then
+            echo "NuGet reported ${vulnerability_count} known vulnerable package finding(s)."
+            exit 1
+          fi
+
+      - name: Build solution
+        run: dotnet build TransLink.Lite.slnx --no-restore --configuration Release
+
+      - name: Run automated tests
+        run: dotnet test TransLink.Lite.slnx --no-build --configuration Release
