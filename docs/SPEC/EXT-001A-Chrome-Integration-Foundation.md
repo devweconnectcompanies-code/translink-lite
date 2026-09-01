@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented locally. Manual Chrome validation remains owner-operated before publication.
+Completed, manually validated in Google Chrome, published, and verified by Backend CI.
 
 ## Scope and architecture
 

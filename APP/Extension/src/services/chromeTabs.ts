@@ -1,7 +1,7 @@
 import type { BrowserTab } from "../models/BrowserTab";
+import { isSupportedTabUrl } from "../models/tabEligibility";
 
 const SELECTED_TAB_KEY = "selectedTabId";
-const SUPPORTED_PROTOCOLS = new Set(["http:", "https:"]);
 
 export class ChromeTabsUnavailableError extends Error {
   constructor() {
@@ -18,16 +18,6 @@ function hasChromeStorageApi(): boolean {
   return typeof chrome !== "undefined" && chrome.storage?.local !== undefined;
 }
 
-function isSupportedUrl(url: string | undefined): boolean {
-  if (!url) return false;
-
-  try {
-    return SUPPORTED_PROTOCOLS.has(new URL(url).protocol);
-  } catch {
-    return false;
-  }
-}
-
 function mapTab(tab: chrome.tabs.Tab): BrowserTab | null {
   if (tab.id === undefined) return null;
 
@@ -38,7 +28,7 @@ function mapTab(tab: chrome.tabs.Tab): BrowserTab | null {
     favIconUrl: tab.favIconUrl ?? null,
     windowId: tab.windowId,
     active: tab.active,
-    supported: isSupportedUrl(tab.url),
+    supported: isSupportedTabUrl(tab.url),
   };
 }
 

@@ -4,6 +4,7 @@ import type { BrowserTab } from "../models/BrowserTab";
 interface TabCardProps {
   tab: BrowserTab;
   selected: boolean;
+  selectionLocked: boolean;
   onSelect: (tabId: number) => void;
 }
 
@@ -18,7 +19,7 @@ function getDisplayUrl(url: string | null): string {
   }
 }
 
-export function TabCard({ tab, selected, onSelect }: TabCardProps) {
+export function TabCard({ tab, selected, selectionLocked, onSelect }: TabCardProps) {
   const [faviconFailed, setFaviconFailed] = useState(false);
   const showFavicon = tab.favIconUrl !== null && !faviconFailed;
 
@@ -27,7 +28,7 @@ export function TabCard({ tab, selected, onSelect }: TabCardProps) {
       <button
         className={`tab-card${selected ? " tab-card--selected" : ""}`}
         type="button"
-        disabled={!tab.supported}
+        disabled={!tab.supported || selectionLocked}
         aria-pressed={selected}
         aria-label={`${selected ? "Selected: " : "Select "}${tab.title}`}
         onClick={() => onSelect(tab.id)}

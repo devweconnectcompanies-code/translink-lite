@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TabCard } from "./components/TabCard";
+import { CaptureControl } from "./components/CaptureControl";
 import type { TabListState } from "./models/BrowserTab";
+import { IDLE_CAPTURE_STATE, type CaptureSnapshot } from "./models/CaptureState";
+import {
+  getCaptureState,
+  startCapture,
+  stopCapture,
+  subscribeToCaptureState,
+} from "./services/captureClient";
 import {
   ChromeTabsUnavailableError,
   loadSelectedTabId,
@@ -17,6 +25,8 @@ function getSafeErrorMessage(error: unknown): string {
 export default function App() {
   const [state, setState] = useState<TabListState>({ status: "loading" });
   const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [captureState, setCaptureState] = useState<CaptureSnapshot>(IDLE_CAPTURE_STATE);
+  const [captureReady, setCaptureReady] = useState(false);
   const refreshSequence = useRef(0);
 
   const refreshTabs = useCallback(async () => {
@@ -72,8 +82,21 @@ export default function App() {
     };
   }, [refreshTabs]);
 
+  useEffect(() => {
+    const unsubscribe = subscribeToCaptureState(setCaptureState);
+    void getCaptureState().then((response) => {
+      setCaptureState(response.state);
+      setCaptureReady(true);
+    });
+    return unsubscribe;
+  }, []);
+
+  const selectionLocked = ["starting", "capturing", "stopping"].includes(
+    captureState.status,
+  );
+
   const selectTab = async (tabId: number) => {
-    if (state.status !== "ready") return;
+    if (state.status !== "ready" || selectionLocked) return;
 
     const tab = state.tabs.find((candidate) => candidate.id === tabId);
     if (!tab?.supported) return;
@@ -88,10 +111,36 @@ export default function App() {
     }
   };
 
+  const effectiveSelectedTabId =
+    selectionLocked && captureState.tabId !== null
+      ? captureState.tabId
+      : state.status === "ready"
+        ? state.selectedTabId
+        : null;
+
   const selectedTab =
     state.status === "ready"
-      ? state.tabs.find((tab) => tab.id === state.selectedTabId) ?? null
+      ? state.tabs.find((tab) => tab.id === effectiveSelectedTabId) ?? null
       : null;
+
+  const beginCapture = async () => {
+    if (!selectedTab) return;
+    setCaptureState({
+      status: "starting",
+      tabId: selectedTab.id,
+      audioLevel: 0,
+      hasSignal: false,
+      errorCode: null,
+    });
+    const response = await startCapture(selectedTab.id);
+    setCaptureState(response.state);
+  };
+
+  const endCapture = async () => {
+    setCaptureState({ ...captureState, status: "stopping", audioLevel: 0, hasSignal: false });
+    const response = await stopCapture();
+    setCaptureState(response.state);
+  };
 
   return (
     <main className="popup-shell">
@@ -150,7 +199,8 @@ export default function App() {
                 <TabCard
                   key={tab.id}
                   tab={tab}
-                  selected={tab.id === state.selectedTabId}
+                  selected={tab.id === effectiveSelectedTabId}
+                  selectionLocked={selectionLocked}
                   onSelect={(tabId) => void selectTab(tabId)}
                 />
               ))}
@@ -166,9 +216,13 @@ export default function App() {
           <span>Selected tab</span>
           <strong>{selectedTab?.title ?? "None selected"}</strong>
         </div>
-        <button className="continue-button" type="button" disabled>
-          Translation coming later
-        </button>
+        <CaptureControl
+          capture={captureState}
+          selectedTab={selectedTab}
+          ready={captureReady}
+          onStart={() => void beginCapture()}
+          onStop={() => void endCapture()}
+        />
       </footer>
     </main>
   );

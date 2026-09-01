@@ -1,6 +1,6 @@
 # TransLink-Lite
 
-TransLink-Lite is the active foundation for a realtime multilingual communication platform. The current repository contains a hardened .NET 10 backend baseline, early Extension/Web application areas, automated PostgreSQL integration tests, and CI. Realtime audio and AWS translation capabilities are planned but are not implemented yet.
+TransLink-Lite is the active foundation for a realtime multilingual communication platform. The repository contains a hardened .NET 10 backend, a Chrome Extension with tab discovery and a local tab-audio capture foundation, automated PostgreSQL integration tests, and CI. Audio transport and AWS translation remain planned.
 
 ## Repository
 
@@ -42,4 +42,4 @@ Swagger is available only in Development. Health probes are exposed at `/health`
 - [`docs/configuration.md`](docs/configuration.md): secure local configuration and runtime settings.
 - [`docs/BASELINE-001-Repository-Backend-Hardening.md`](docs/BASELINE-001-Repository-Backend-Hardening.md): completed baseline specification and record.
 
-The next milestone is `EXT-001`, beginning with `EXT-001A — Chrome Integration Foundation`. Audio capture, realtime transport, and AWS services remain later scoped work.
+`EXT-001A` is complete. `EXT-001B` implements the local tab-audio capture foundation and awaits manual Chrome validation. Transport-ready chunking, realtime transport, and AWS services remain later scoped work.
