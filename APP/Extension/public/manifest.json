@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "TransLink Lite",
+  "version": "0.1.0",
+  "description": "Select a browser tab as the foundation for future realtime translation.",
+  "permissions": ["tabs", "storage"],
+  "action": {
+    "default_popup": "index.html",
+    "default_title": "Open TransLink Lite"
+  }
+}

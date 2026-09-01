@@ -132,7 +132,7 @@ Detailed implementation documentation is in `backend-architecture.md`; local con
 
 The following are product direction, not current functionality:
 
-- real browser-tab discovery and audio capture;
+- real browser-tab audio capture (tab discovery and selection are implemented in EXT-001A);
 - WebSocket transport and connection lifecycle;
 - realtime audio ingestion, bounded buffers, and backpressure;
 - AWS Transcribe Streaming, Translate, and Polly;
@@ -194,7 +194,7 @@ Repository hygiene, secret rotation/configuration, reproducible SDK, dependency 
 
 `EXT-001` begins the first client milestone. Its first approved execution unit must be:
 
-#### EXT-001A — Chrome Integration Foundation
+#### EXT-001A — Chrome Integration Foundation (implemented locally)
 
 - inspect the existing Extension implementation before changes;
 - establish/verify Manifest V3 structure;
