@@ -49,6 +49,15 @@ var realtimeAudioOptions = realtimeAudioSection.Get<RealtimeAudioOptions>()
     ?? new RealtimeAudioOptions();
 ValidateRealtimeAudioOptions(realtimeAudioOptions, builder.Environment);
 
+var awsTranscribeOptions = builder.Configuration
+    .GetSection(AwsTranscribeOptions.SectionName)
+    .Get<AwsTranscribeOptions>() ?? new AwsTranscribeOptions();
+if (!AwsTranscribeOptions.IsValid(awsTranscribeOptions))
+{
+    throw new InvalidOperationException(
+        "AwsTranscribe configuration is missing or invalid.");
+}
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
@@ -83,7 +92,7 @@ builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 builder.Services.AddScoped<ITranslationSessionService, TranslationSessionService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ITranslationSessionRepository, TranslationSessionRepository>();
-builder.Services.AddSingleton<IRealtimeAudioSessionFactory, ValidationRealtimeAudioSessionFactory>();
+builder.Services.AddAwsRealtimeTranscription(awsTranscribeOptions);
 builder.Services.AddScoped<RealtimeAudioConnectionHandler>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

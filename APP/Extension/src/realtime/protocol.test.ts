@@ -13,14 +13,15 @@ import {
 
 describe("realtime protocol", () => {
   it("creates the versioned session start contract", () => {
-    expect(createSessionStart(48_000, 150)).toEqual({
+    expect(createSessionStart(48_000, 150, "en-US")).toEqual({
       type: "session.start",
-      protocolVersion: 1,
+      protocolVersion: 2,
       audio: {
         encoding: AUDIO_ENCODING,
         sampleRateHz: 48_000,
         channelCount: 1,
         chunkDurationMs: 150,
+        sourceLanguage: "en-US",
       },
     });
   });
@@ -43,18 +44,18 @@ describe("realtime protocol", () => {
 
     expect(frame.byteLength).toBe(BINARY_HEADER_LENGTH + 320);
     expect(String.fromCharCode(view.getUint8(0), view.getUint8(1))).toBe("TL");
-    expect(view.getUint8(2)).toBe(1);
+    expect(view.getUint8(2)).toBe(2);
     expect(view.getBigUint64(4, true)).toBe(9n);
     expect(view.getBigUint64(12, true)).toBe(1_350n);
     expect(view.getUint32(20, true)).toBe(320);
   });
 
   it("rejects unknown or mismatched server controls", () => {
-    expect(parseServerControl({ type: "session.accepted", protocolVersion: 1 }))
-      .not.toBeNull();
     expect(parseServerControl({ type: "session.accepted", protocolVersion: 2 }))
+      .not.toBeNull();
+    expect(parseServerControl({ type: "session.accepted", protocolVersion: 1 }))
       .toBeNull();
-    expect(parseServerControl({ type: "translation.complete", protocolVersion: 1 }))
+    expect(parseServerControl({ type: "translation.complete", protocolVersion: 2 }))
       .toBeNull();
   });
 

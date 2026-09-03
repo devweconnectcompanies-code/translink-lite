@@ -4,7 +4,7 @@ public sealed class RealtimeAudioOptions
 {
     public const string SectionName = "RealtimeAudio";
 
-    public int ProtocolVersion { get; init; } = 1;
+    public int ProtocolVersion { get; init; } = 2;
 
     public int MaxBinaryFrameBytes { get; init; } = 65_560;
 

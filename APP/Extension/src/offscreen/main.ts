@@ -6,6 +6,7 @@ import {
   type OffscreenResponse,
 } from "../messaging/messages";
 import type { TransportErrorCode, TransportSnapshot } from "../models/TransportState";
+import { DISCONNECTED_TRANSPORT_STATE } from "../models/TransportState";
 import {
   RealtimeAudioTransport,
   type RealtimeTransportConfiguration,
@@ -30,6 +31,7 @@ let levelMonitorId: ReturnType<typeof setInterval> | null = null;
 let suppressTrackEnd = false;
 let resumeInProgress = false;
 let smoothedLevel = 0;
+let currentTransportState: TransportSnapshot = { ...DISCONNECTED_TRANSPORT_STATE };
 
 async function sendBackgroundEvent(message: ExtensionMessage): Promise<void> {
   try {
@@ -40,6 +42,7 @@ async function sendBackgroundEvent(message: ExtensionMessage): Promise<void> {
 }
 
 function reportTransportState(state: TransportSnapshot): void {
+  currentTransportState = state;
   void sendBackgroundEvent({
     target: "background",
     type: MessageType.TransportStateChanged,
@@ -171,9 +174,9 @@ async function handleUnexpectedTermination(
 async function handleTransportFailure(errorCode: TransportErrorCode): Promise<void> {
   if (suppressTrackEnd) return;
   reportTransportState({
+    ...currentTransportState,
     status: "error",
-    chunksSent: 0,
-    bytesSent: 0,
+    transcriptionActive: false,
     errorCode,
   });
   await handleUnexpectedTermination(mapTransportError(errorCode));

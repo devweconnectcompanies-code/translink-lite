@@ -44,7 +44,9 @@ export function CaptureControl({
             <strong>Capturing tab audio</strong>
             <span>
               {capture.transport.status === "streaming"
-                ? `Streaming · ${capture.transport.chunksSent} chunks`
+                ? capture.transport.transcriptionActive
+                  ? `Transcription active · ${capture.transport.finalTranscriptsReceived} final results`
+                  : `Streaming · ${capture.transport.chunksSent} chunks`
                 : capture.transport.status === "connected"
                   ? "Transport connected"
                   : capture.hasSignal

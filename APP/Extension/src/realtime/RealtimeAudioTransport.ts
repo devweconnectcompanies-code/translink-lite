@@ -18,6 +18,7 @@ export interface RealtimeTransportConfiguration {
   endpoint: string;
   accessToken: string;
   chunkDurationMs: number;
+  sourceLanguage: string;
 }
 
 export interface RealtimeTransportDiagnostic {
@@ -38,6 +39,9 @@ export class RealtimeAudioTransport {
   private maxBufferedBytes = 0;
   private lastProgressUpdate = 0;
   private failed = false;
+  private transcriptionActive = false;
+  private partialTranscriptsReceived = 0;
+  private finalTranscriptsReceived = 0;
 
   constructor(
     private readonly configuration: RealtimeTransportConfiguration,
@@ -83,6 +87,7 @@ export class RealtimeAudioTransport {
         socket.send(JSON.stringify(createSessionStart(
           sampleRateHz,
           this.configuration.chunkDurationMs,
+          this.configuration.sourceLanguage,
         )));
         logDevelopmentEvent("session.start.sent");
       };
@@ -106,6 +111,7 @@ export class RealtimeAudioTransport {
         if (message?.type === "session.accepted") {
           clearTimeout(timeout);
           accepted = true;
+          this.transcriptionActive = true;
           logDevelopmentEvent("session.accepted");
           this.onState(this.snapshot("connected"));
           resolve();
@@ -115,18 +121,28 @@ export class RealtimeAudioTransport {
             code: sanitizeWebSocketCloseReason(message.code ?? ""),
           });
           reject(new Error("server-rejected"));
-        } else if (message?.type === "transport.error") {
+        } else if (message?.type === "transport.error" || message?.type === "transcription.error") {
           clearTimeout(timeout);
           logDevelopmentEvent("transport.error", {
             code: sanitizeWebSocketCloseReason(message.code ?? ""),
           });
           if (accepted && !this.failed) {
             this.failed = true;
-            this.onFailure("protocol-error");
+            this.transcriptionActive = false;
+            this.onFailure(message.type === "transcription.error" ? "transcription-failed" : "protocol-error");
           } else {
             reject(new Error("server-rejected"));
           }
+        } else if (message?.type === "transcript.partial") {
+          this.partialTranscriptsReceived += 1;
+          logDevelopmentEvent("transcript.partial", { code: message.eventSequence });
+          this.onState(this.snapshot("streaming"));
+        } else if (message?.type === "transcript.final") {
+          this.finalTranscriptsReceived += 1;
+          logDevelopmentEvent("transcript.final", { code: message.eventSequence });
+          this.onState(this.snapshot("streaming"));
         } else if (message?.type === "session.stopped") {
+          this.transcriptionActive = false;
           socket.close(1000, "session-stopped");
         }
       };
@@ -218,6 +234,9 @@ export class RealtimeAudioTransport {
       status,
       chunksSent: this.chunksSent,
       bytesSent: this.bytesSent,
+      transcriptionActive: this.transcriptionActive,
+      partialTranscriptsReceived: this.partialTranscriptsReceived,
+      finalTranscriptsReceived: this.finalTranscriptsReceived,
       errorCode: null,
     };
   }

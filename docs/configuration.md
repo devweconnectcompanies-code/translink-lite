@@ -110,7 +110,7 @@ Safe transport defaults are tracked under `RealtimeAudio`:
 
 | Key | Default | Purpose |
 |---|---:|---|
-| `ProtocolVersion` | `1` | Required control/binary protocol version |
+| `ProtocolVersion` | `2` | Required control/binary protocol version |
 | `MaxBinaryFrameBytes` | `65560` | Maximum complete binary WebSocket message |
 | `MaxControlMessageBytes` | `4096` | Maximum complete JSON control message |
 | `ChunkDurationMs` | `150` | Required client PCM chunk duration |
@@ -144,6 +144,12 @@ chrome.storage.local.remove("developmentAccessToken")
 
 Never commit, log, or paste a real token into documentation. Full client login, production token storage, and refresh are deferred.
 
+## AWS Transcribe Streaming
+
+`AwsTranscribe` contains only non-secret operational configuration: explicit `Region`, partial-result stabilization, bounded audio/transcript capacities, write/start/completion timeouts, and maximum session duration. Environment overrides use keys such as `AwsTranscribe__Region`. Startup rejects missing or unsafe values.
+
+Credentials are resolved only through the standard AWS SDK credential provider chain. Developers may select a local AWS CLI profile or use temporary environment credentials; deployed workloads should use a managed IAM role. Never place AWS credentials in tracked configuration, client storage, test fixtures, or documentation. See `SPEC/EXT-001D-AWS-Transcribe-Streaming-Foundation.md` for least-privilege IAM and manual validation.
+
 ## Startup behavior
 
 The API fails fast with a safe configuration error when:
@@ -156,9 +162,10 @@ The API fails fast with a safe configuration error when:
 - `RateLimiting:Authentication:PermitLimit` is not greater than zero;
 - `RateLimiting:Authentication:WindowSeconds` is not greater than zero;
 - `RateLimiting:Authentication:QueueLimit` is negative.
-- realtime protocol version is not `1`;
+- realtime protocol version is not `2`;
 - realtime frame/control limits, chunk duration, timeouts, or violation limit fall outside their documented ranges.
 - `RealtimeAudio:AllowedOrigins` is empty outside Development or IntegrationTesting.
+- `AwsTranscribe` region, bounded capacities, stabilization, timeouts, or maximum session duration are invalid.
 
 Validation errors identify the missing configuration key but never include its value.
 

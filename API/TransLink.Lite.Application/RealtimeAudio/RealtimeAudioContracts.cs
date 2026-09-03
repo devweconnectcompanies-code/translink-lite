@@ -11,7 +11,8 @@ public sealed record RealtimeAudioFormat(
     string Encoding,
     int SampleRateHz,
     int ChannelCount,
-    int ChunkDurationMs);
+    int ChunkDurationMs,
+    string SourceLanguage);
 
 public sealed record RealtimeAudioLimits(
     int ProtocolVersion,
@@ -41,6 +42,26 @@ public readonly record struct RealtimeAudioSessionSummary(
     ulong? LastSequence,
     int ProtocolViolationCount,
     TimeSpan Duration);
+
+public sealed record SpeechTranscriptionResult(
+    string ResultId,
+    string Text,
+    bool IsPartial,
+    TimeSpan? StartTime,
+    TimeSpan? EndTime,
+    string SourceLanguage);
+
+public sealed record RealtimeTranscriptEvent(
+    string Type,
+    int ProtocolVersion,
+    Guid SessionId,
+    long EventSequence,
+    string ResultId,
+    string Text,
+    bool IsFinal,
+    long? StartTimeMilliseconds,
+    long? EndTimeMilliseconds,
+    string SourceLanguage);
 
 public readonly record struct ControlParseResult(
     bool IsValid,

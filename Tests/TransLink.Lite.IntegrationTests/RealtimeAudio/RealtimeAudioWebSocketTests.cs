@@ -2,8 +2,11 @@ using System.Buffers.Binary;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using TransLink.Lite.Application.RealtimeAudio;
 using TransLink.Lite.IntegrationTests.Infrastructure;
+using TransLink.Lite.Infrastructure.Persistence;
 
 namespace TransLink.Lite.IntegrationTests.RealtimeAudio;
 
@@ -36,16 +39,23 @@ public sealed class RealtimeAudioWebSocketTests
     {
         await _fixture.ResetDatabaseAsync();
         using var socket = await ConnectAuthenticatedAsync();
-        await SendStartAsync(socket);
+        await SendStartAsync(socket, "EN-us");
 
         using var accepted = await ReceiveControlAsync(socket);
         Assert.Equal("session.accepted", accepted.RootElement.GetProperty("type").GetString());
-        Assert.Equal(1, accepted.RootElement.GetProperty("protocolVersion").GetInt32());
+        Assert.Equal(2, accepted.RootElement.GetProperty("protocolVersion").GetInt32());
+        Assert.Equal("en-US", accepted.RootElement.GetProperty("sourceLanguage").GetString());
 
         await socket.SendAsync(CreateFrame(0, 0), WebSocketMessageType.Binary, true, default);
+        using var partial = await ReceiveControlAsync(socket);
+        using var final = await ReceiveControlAsync(socket);
+        Assert.Equal("transcript.partial", partial.RootElement.GetProperty("type").GetString());
+        Assert.False(partial.RootElement.GetProperty("isFinal").GetBoolean());
+        Assert.Equal("transcript.final", final.RootElement.GetProperty("type").GetString());
+        Assert.True(final.RootElement.GetProperty("isFinal").GetBoolean());
         await socket.SendAsync(CreateFrame(1, 150), WebSocketMessageType.Binary, true, default);
         await socket.SendAsync(
-            Encoding.UTF8.GetBytes("""{"type":"session.stop","protocolVersion":1}"""),
+            Encoding.UTF8.GetBytes("""{"type":"session.stop","protocolVersion":2}"""),
             WebSocketMessageType.Text,
             true,
             default);
@@ -55,6 +65,45 @@ public sealed class RealtimeAudioWebSocketTests
         var close = await socket.ReceiveAsync(new byte[1], default);
         Assert.Equal(WebSocketMessageType.Close, close.MessageType);
         Assert.Equal(WebSocketCloseStatus.NormalClosure, socket.CloseStatus);
+        socket.Dispose();
+        await WaitUntilAsync(() =>
+            _fixture.Factory.RealtimeTranscription.Completed == 1 &&
+            _fixture.Factory.RealtimeTranscription.Disposed == 1);
+
+        await using var scope = _fixture.Factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        Assert.Equal(0, await dbContext.TranslationSessions.CountAsync());
+    }
+
+    [Fact]
+    public async Task Start_WithUnsupportedSourceLanguage_IsRejectedBeforeProviderStarts()
+    {
+        await _fixture.ResetDatabaseAsync();
+        using var socket = await ConnectAuthenticatedAsync();
+        await SendStartAsync(socket, "fr-FR");
+
+        using var rejected = await ReceiveControlAsync(socket);
+        Assert.Equal("session.rejected", rejected.RootElement.GetProperty("type").GetString());
+        Assert.Equal("unsupported-audio-format", rejected.RootElement.GetProperty("code").GetString());
+        Assert.Equal(0, _fixture.Factory.RealtimeTranscription.Created);
+    }
+
+    [Fact]
+    public async Task Stream_WhenProviderFails_ReturnsSafeTranscriptionError()
+    {
+        await _fixture.ResetDatabaseAsync();
+        _fixture.Factory.RealtimeTranscription.FailOnAudio = true;
+        using var socket = await ConnectAuthenticatedAsync();
+        await SendStartAsync(socket);
+        using var accepted = await ReceiveControlAsync(socket);
+
+        await socket.SendAsync(CreateFrame(0, 0), WebSocketMessageType.Binary, true, default);
+
+        using var error = await ReceiveControlAsync(socket);
+        Assert.Equal("transcription.error", error.RootElement.GetProperty("type").GetString());
+        Assert.Equal(
+            "transcription-provider-unavailable",
+            error.RootElement.GetProperty("code").GetString());
     }
 
     [Fact]
@@ -172,6 +221,7 @@ public sealed class RealtimeAudioWebSocketTests
             default);
 
         Assert.Equal(WebSocketState.Closed, socket.State);
+        await WaitUntilAsync(() => _fixture.Factory.RealtimeTranscription.Disposed == 1);
     }
 
     private async Task<WebSocket> ConnectAuthenticatedAsync()
@@ -187,10 +237,21 @@ public sealed class RealtimeAudioWebSocketTests
             CancellationToken.None);
     }
 
-    private static Task SendStartAsync(WebSocket socket) =>
+    private static Task SendStartAsync(WebSocket socket, string sourceLanguage = "en-US") =>
         socket.SendAsync(
-            Encoding.UTF8.GetBytes(
-                """{"type":"session.start","protocolVersion":1,"audio":{"encoding":"pcm_s16le","sampleRateHz":48000,"channelCount":1,"chunkDurationMs":150}}"""),
+            JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                type = "session.start",
+                protocolVersion = 2,
+                audio = new
+                {
+                    encoding = "pcm_s16le",
+                    sampleRateHz = 48_000,
+                    channelCount = 1,
+                    chunkDurationMs = 150,
+                    sourceLanguage,
+                },
+            }),
             WebSocketMessageType.Text,
             true,
             default);
@@ -215,5 +276,16 @@ public sealed class RealtimeAudioWebSocketTests
         BinaryPrimitives.WriteUInt64LittleEndian(frame.AsSpan(12, 8), elapsedMilliseconds);
         BinaryPrimitives.WriteUInt32LittleEndian(frame.AsSpan(20, 4), payloadLength);
         return frame;
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(20);
+        }
+
+        Assert.True(condition());
     }
 }

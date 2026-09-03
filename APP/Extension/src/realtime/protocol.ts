@@ -1,10 +1,10 @@
-export const REALTIME_PROTOCOL_VERSION = 1;
+export const REALTIME_PROTOCOL_VERSION = 2;
 export const BINARY_HEADER_LENGTH = 24;
 export const AUDIO_ENCODING = "pcm_s16le";
 export const DEFAULT_CHUNK_DURATION_MS = 150;
 export const TRANSPORT_SAMPLE_RATE_HZ = 48_000;
 export const DEFAULT_REALTIME_ENDPOINT = "ws://localhost:5221/api/realtime/audio";
-export const WEBSOCKET_SUBPROTOCOL = "translink.realtime.v1";
+export const WEBSOCKET_SUBPROTOCOL = "translink.realtime.v2";
 export const BEARER_SUBPROTOCOL_PREFIX = "translink.bearer.";
 
 export interface RealtimeEndpointDetails {
@@ -46,19 +46,26 @@ export interface SessionStartMessage {
     sampleRateHz: number;
     channelCount: 1;
     chunkDurationMs: number;
+    sourceLanguage: string;
   };
 }
 
 export interface ServerControlMessage {
-  type: "session.accepted" | "session.rejected" | "session.stopped" | "transport.error";
+  type: "session.accepted" | "session.rejected" | "session.stopped" | "transport.error" | "transcription.error" | "transcript.partial" | "transcript.final";
   protocolVersion: number;
   sessionId?: string;
   code?: string;
+  eventSequence?: number;
+  resultId?: string;
+  text?: string;
+  isFinal?: boolean;
+  sourceLanguage?: string;
 }
 
 export function createSessionStart(
   sampleRateHz: number,
   chunkDurationMs: number,
+  sourceLanguage: string,
 ): SessionStartMessage {
   return {
     type: "session.start",
@@ -68,6 +75,7 @@ export function createSessionStart(
       sampleRateHz,
       channelCount: 1,
       chunkDurationMs,
+      sourceLanguage,
     },
   };
 }
@@ -81,8 +89,23 @@ export function parseServerControl(value: unknown): ServerControlMessage | null 
       "session.rejected",
       "session.stopped",
       "transport.error",
+      "transcription.error",
+      "transcript.partial",
+      "transcript.final",
     ].includes(candidate.type ?? "") ||
     candidate.protocolVersion !== REALTIME_PROTOCOL_VERSION
+  ) {
+    return null;
+  }
+  if (
+    (candidate.type === "transcript.partial" || candidate.type === "transcript.final") &&
+    (typeof candidate.eventSequence !== "number" ||
+      !Number.isSafeInteger(candidate.eventSequence) ||
+      candidate.eventSequence < 0 ||
+      typeof candidate.resultId !== "string" ||
+      typeof candidate.text !== "string" ||
+      typeof candidate.isFinal !== "boolean" ||
+      typeof candidate.sourceLanguage !== "string")
   ) {
     return null;
   }

@@ -23,7 +23,7 @@ TransLink-Lite/
 └── TransLink.Lite.slnx
 ```
 
-The repository is a modular monolith. It now contains an authenticated realtime audio-ingestion boundary and ephemeral validation sink; it does not contain AWS translation services.
+The repository is a modular monolith. It contains an authenticated realtime audio-ingestion boundary and an AWS Transcribe Streaming adapter behind a provider-neutral Application abstraction. AWS Translate and Polly are not implemented.
 
 ## Projects and dependencies
 
@@ -56,6 +56,7 @@ Domain has no dependency on ASP.NET Core, EF Core, Infrastructure, or API. Contr
 | `UserProfileService` | Read and update the authenticated user's profile |
 | `TranslationSessionService` | Create and retrieve sessions owned by the authenticated user |
 | `RealtimeAudioProtocol` | Parse and validate versioned generic control and binary-audio frames |
+| `IRealtimeSpeechTranscriptionSession` | Provider-neutral asynchronous speech-stream lifecycle and transcript output |
 
 Persistence abstractions are specific: `IUserRepository` and `ITranslationSessionRepository`. No generic repository abstraction is used. Request and response DTOs prevent binding domain entities directly and do not expose `UserId`, `PasswordHash`, or `NormalizedEmail` as user-controlled fields.
 
@@ -123,9 +124,9 @@ The local Extension default targets `ws://localhost:5221/api/realtime/audio`, ma
 
 Control messages are versioned JSON; audio uses a compact binary header plus mono signed PCM16 little-endian payload. The API validates handshake order, format, version, message size, payload length, sequence continuity, monotonic elapsed time, and lifecycle transitions.
 
-The receive loop rents one bounded buffer and awaits direct sink consumption before receiving another frame. `IRealtimeAudioSessionFactory` is an Application abstraction; Infrastructure implements a non-persistent validation sink that retains only counters and emits a safe completion summary. No audio reaches PostgreSQL or disk.
+The receive loop rents one bounded buffer and awaits bounded provider handoff before receiving another frame. `IRealtimeSpeechTranscriptionSessionFactory` is an Application abstraction; Infrastructure implements AWS Transcribe Streaming with isolated per-connection state and bounded audio/transcript channels. Generic partial/final events return over the producer socket. No audio or transcript reaches PostgreSQL or disk, and AWS SDK types remain in Infrastructure.
 
-One connection currently remains on one API instance. The client contract exposes no process affinity, and future AWS/shared processing can replace the sink without rewriting clients. Distributed coordination is intentionally deferred.
+One connection currently remains on one API instance. The contract exposes no Chrome or provider concepts. A later server-owned routing layer can connect an authenticated producer to authenticated Web/Mobile/Desktop subscribers while retaining the same transcript event shape. Distributed coordination is intentionally deferred.
 
 ## Configuration and secrets
 
@@ -133,10 +134,10 @@ Tracked configuration contains only non-sensitive defaults. Local database crede
 
 ## Automated verification
 
-The approved baseline contained 30 unit tests and 26 integration tests. EXT-001C adds protocol unit tests and authenticated WebSocket integration coverage for lifecycle, ordering, malformed/oversized input, and cleanup. Integration tests continue using `WebApplicationFactory`, Testcontainers, PostgreSQL 17 Alpine, an ephemeral database, and real migrations. Guards prevent targeting `translink_lite_dev`.
+The current suite contains 62 unit tests and 36 integration tests. EXT-001C added protocol/WebSocket lifecycle coverage; EXT-001D adds source-language, generic transcript mapping, configuration, deterministic provider output/failure, non-persistence, and cleanup coverage. Integration tests continue using `WebApplicationFactory`, Testcontainers, PostgreSQL 17 Alpine, an ephemeral database, and real migrations. AWS is replaced by a fake and guards prevent targeting `translink_lite_dev`.
 
 GitHub Actions runs on `ubuntu-latest` for pushes and pull requests to `main`, and manual dispatch. It resolves the SDK from `global.json`, restores, audits NuGet packages, builds Release, and runs the complete test suite. The first published baseline run succeeded.
 
 ## Current boundaries
 
-Not yet implemented: AWS Transcribe/Translate/Polly, translated result delivery, durable realtime orchestration, production authentication UX, automatic reconnect/session resume, distributed infrastructure, production cloud deployment, external observability, calls, billing, organizations, or enterprise modules.
+Not yet implemented: AWS Translate/Polly, translated result delivery, durable realtime orchestration, Web subscriber routing/UI, production authentication UX, automatic reconnect/session resume, distributed infrastructure, production cloud deployment, external observability, calls, billing, organizations, or enterprise modules. AWS Transcribe real-cloud behavior still requires owner-run manual validation.

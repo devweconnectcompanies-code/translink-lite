@@ -135,6 +135,9 @@ export default function App() {
         status: "connecting",
         chunksSent: 0,
         bytesSent: 0,
+        transcriptionActive: false,
+        partialTranscriptsReceived: 0,
+        finalTranscriptsReceived: 0,
         errorCode: null,
       },
     });

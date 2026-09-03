@@ -211,14 +211,23 @@ Repository hygiene, secret rotation/configuration, reproducible SDK, dependency 
 - audio activity measurement and deterministic cleanup;
 - manually validated stable local capture, playback, metering, and cleanup.
 
-#### EXT-001C — Realtime Audio Transport Foundation (implemented locally)
+#### EXT-001C — Realtime Audio Transport Foundation (completed)
 
 - AudioWorklet mono PCM16LE chunking with a 150 ms tracked default;
 - authenticated, versioned binary WebSocket transport;
 - generic multi-client contract and server-controlled ephemeral sessions;
 - bounded direct consumption, protocol limits, cancellation, and validation metrics;
 - automated protocol and WebSocket lifecycle tests;
-- manual end-to-end Chrome/API validation pending.
+- manually validated real browser capture and authenticated transport lifecycle.
+
+#### EXT-001D — AWS Transcribe Streaming Foundation (implemented locally)
+
+- provider-neutral speech transcription session boundary in Application;
+- AWS Transcribe Streaming adapter isolated in Infrastructure;
+- protocol v2 source-language negotiation and generic partial/final transcript events;
+- bounded audio/result flow, cancellation, safe logging, and no content persistence;
+- Extension operational counters only; Web remains the future primary transcript UI;
+- deterministic CI tests use a fake provider; real AWS validation remains owner-run.
 
 #### Later EXT-001 work
 
@@ -227,7 +236,7 @@ Repository hygiene, secret rotation/configuration, reproducible SDK, dependency 
 ### Subsequent milestones
 
 - `RT-001`: production reconnect/resume semantics and distributed transport operations when justified.
-- `AWS-STT-001`: AWS Transcribe Streaming.
+- `AWS-STT-001`: implementation is covered by EXT-001D; closure requires real-AWS manual validation and publication.
 - `AWS-TR-001`: AWS Translate.
 - `WEB-RT-001`: realtime Web rendering and measured end-to-end latency.
 - Later: Polly/TTS, calls, richer history, commercial and enterprise capabilities.

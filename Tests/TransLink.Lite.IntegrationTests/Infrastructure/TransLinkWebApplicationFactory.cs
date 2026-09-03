@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
 using TransLink.Lite.Infrastructure.Persistence;
+using TransLink.Lite.Application.RealtimeAudio;
 
 namespace TransLink.Lite.IntegrationTests.Infrastructure;
 
@@ -15,6 +16,7 @@ public sealed class TransLinkWebApplicationFactory : WebApplicationFactory<Progr
     private readonly string _connectionString;
     private readonly int _authenticationPermitLimit;
     private readonly string? _realtimeAllowedOrigin;
+    public FakeRealtimeSpeechTranscriptionSessionFactory RealtimeTranscription { get; } = new();
 
     public TransLinkWebApplicationFactory(
         string connectionString,
@@ -68,6 +70,8 @@ public sealed class TransLinkWebApplicationFactory : WebApplicationFactory<Progr
             services.RemoveAll<DbContextOptions<AppDbContext>>();
             services.RemoveAll<AppDbContext>();
             services.AddDbContext<AppDbContext>(options => options.UseNpgsql(_connectionString));
+            services.RemoveAll<IRealtimeSpeechTranscriptionSessionFactory>();
+            services.AddSingleton<IRealtimeSpeechTranscriptionSessionFactory>(RealtimeTranscription);
         });
     }
 }

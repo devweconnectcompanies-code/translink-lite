@@ -11,13 +11,13 @@ namespace TransLink.Lite.API.RealtimeAudio;
 public sealed class RealtimeAudioConnectionHandler
 {
     private readonly RealtimeAudioOptions _options;
-    private readonly IRealtimeAudioSessionFactory _sessionFactory;
+    private readonly IRealtimeSpeechTranscriptionSessionFactory _sessionFactory;
     private readonly ILogger<RealtimeAudioConnectionHandler> _logger;
     private readonly IWebHostEnvironment _environment;
 
     public RealtimeAudioConnectionHandler(
         IOptions<RealtimeAudioOptions> options,
-        IRealtimeAudioSessionFactory sessionFactory,
+        IRealtimeSpeechTranscriptionSessionFactory sessionFactory,
         ILogger<RealtimeAudioConnectionHandler> logger,
         IWebHostEnvironment environment)
     {
@@ -78,12 +78,14 @@ public sealed class RealtimeAudioConnectionHandler
 
         using var socket = await context.WebSockets.AcceptWebSocketAsync(
             RealtimeAudioProtocol.WebSocketSubprotocol);
+        using var sendLock = new SemaphoreSlim(1, 1);
         var sessionId = Guid.NewGuid();
         var bufferSize = Math.Max(
             _options.MaxBinaryFrameBytes,
             _options.MaxControlMessageBytes) + 1;
         var rentedBuffer = ArrayPool<byte>.Shared.Rent(bufferSize);
-        IRealtimeAudioSession? session = null;
+        IRealtimeSpeechTranscriptionSession? session = null;
+        var sessionCompleted = false;
         var violations = 0;
 
         _logger.LogInformation(
@@ -103,7 +105,8 @@ public sealed class RealtimeAudioConnectionHandler
             if (handshake.Status != ReceiveStatus.Complete ||
                 handshake.MessageType != WebSocketMessageType.Text)
             {
-                await RejectAsync(socket, sessionId, "invalid-handshake", cancellationToken);
+                await RejectAsync(
+                    socket, sendLock, sessionId, "invalid-handshake", cancellationToken);
                 return;
             }
 
@@ -111,16 +114,39 @@ public sealed class RealtimeAudioConnectionHandler
                 rentedBuffer.AsSpan(0, handshake.Count));
             if (!TryValidateStart(control, out var format, out var startError))
             {
-                await RejectAsync(socket, sessionId, startError, cancellationToken);
+                await RejectAsync(socket, sendLock, sessionId, startError, cancellationToken);
                 return;
             }
 
             session = _sessionFactory.Create(sessionId, authenticatedUserId, format!);
-            await SendControlAsync(socket, new
+            try
+            {
+                await session.StartAsync(
+                    (transcript, eventCancellationToken) => SendControlAsync(
+                        socket,
+                        sendLock,
+                        transcript,
+                        eventCancellationToken),
+                    cancellationToken);
+            }
+            catch (RealtimeTranscriptionException exception)
+            {
+                await RejectAsync(
+                    socket,
+                    sendLock,
+                    sessionId,
+                    exception.ErrorCode,
+                    cancellationToken);
+                return;
+            }
+
+            await SendControlAsync(socket, sendLock, new
             {
                 type = "session.accepted",
                 protocolVersion = _options.ProtocolVersion,
                 sessionId,
+                sourceLanguage = format!.SourceLanguage,
+                transcriptionActive = true,
             }, cancellationToken);
 
             _logger.LogInformation(
@@ -176,6 +202,7 @@ public sealed class RealtimeAudioConnectionHandler
                     violations++;
                     if (await HandleViolationAsync(
                             socket,
+                            sendLock,
                             sessionId,
                             "invalid-fragmentation",
                             violations,
@@ -199,7 +226,9 @@ public sealed class RealtimeAudioConnectionHandler
                         rentedBuffer.AsSpan(0, received.Count));
                     if (IsValidStop(message))
                     {
-                        await SendControlAsync(socket, new
+                        await session.CompleteAsync(violations, cancellationToken);
+                        sessionCompleted = true;
+                        await SendControlAsync(socket, sendLock, new
                         {
                             type = "session.stopped",
                             protocolVersion = _options.ProtocolVersion,
@@ -216,6 +245,7 @@ public sealed class RealtimeAudioConnectionHandler
                     violations++;
                     if (await HandleViolationAsync(
                             socket,
+                            sendLock,
                             sessionId,
                             message.ErrorCode ?? "invalid-control",
                             violations,
@@ -228,6 +258,7 @@ public sealed class RealtimeAudioConnectionHandler
                     violations++;
                     if (await HandleViolationAsync(
                             socket,
+                            sendLock,
                             sessionId,
                             "unsupported-message-type",
                             violations,
@@ -247,6 +278,7 @@ public sealed class RealtimeAudioConnectionHandler
                     violations++;
                     if (await HandleViolationAsync(
                             socket,
+                            sendLock,
                             sessionId,
                             frameError,
                             violations,
@@ -255,7 +287,7 @@ public sealed class RealtimeAudioConnectionHandler
                 }
 
                 var header = parsedFrame.Header;
-                await session.ConsumeAsync(
+                await session.SendAudioAsync(
                     new RealtimeAudioChunk(
                         header,
                         rentedBuffer.AsMemory(
@@ -274,6 +306,24 @@ public sealed class RealtimeAudioConnectionHandler
                 "timeout",
                 CancellationToken.None);
         }
+        catch (RealtimeTranscriptionException exception)
+        {
+            _logger.LogWarning(
+                "Realtime transcription session failed. SessionId: {SessionId}, Category: {Category}",
+                sessionId,
+                exception.ErrorCode);
+            await SendControlAsync(socket, sendLock, new
+            {
+                type = "transcription.error",
+                protocolVersion = _options.ProtocolVersion,
+                code = exception.ErrorCode,
+            }, CancellationToken.None);
+            await CloseSafelyAsync(
+                socket,
+                WebSocketCloseStatus.InternalServerError,
+                "transcription-failed",
+                CancellationToken.None);
+        }
         catch (WebSocketException exception)
         {
             _logger.LogWarning(
@@ -285,7 +335,8 @@ public sealed class RealtimeAudioConnectionHandler
         {
             if (session is not null)
             {
-                session.Complete(violations);
+                if (!sessionCompleted)
+                    await session.CompleteAsync(violations, CancellationToken.None);
                 await session.DisposeAsync();
             }
 
@@ -314,6 +365,11 @@ public sealed class RealtimeAudioConnectionHandler
             errorCode = validationError;
             return false;
         }
+
+        RealtimeTranscriptionLanguageCatalog.TryNormalize(
+            format!.SourceLanguage,
+            out var normalizedSourceLanguage);
+        format = format with { SourceLanguage = normalizedSourceLanguage };
 
         errorCode = string.Empty;
         return true;
@@ -347,6 +403,7 @@ public sealed class RealtimeAudioConnectionHandler
 
     private async Task<bool> HandleViolationAsync(
         WebSocket socket,
+        SemaphoreSlim sendLock,
         Guid sessionId,
         string errorCode,
         int violations,
@@ -358,7 +415,7 @@ public sealed class RealtimeAudioConnectionHandler
             errorCode,
             violations);
 
-        await SendControlAsync(socket, new
+        await SendControlAsync(socket, sendLock, new
         {
             type = "transport.error",
             protocolVersion = _options.ProtocolVersion,
@@ -377,11 +434,12 @@ public sealed class RealtimeAudioConnectionHandler
 
     private async Task RejectAsync(
         WebSocket socket,
+        SemaphoreSlim sendLock,
         Guid sessionId,
         string errorCode,
         CancellationToken cancellationToken)
     {
-        await SendControlAsync(socket, new
+        await SendControlAsync(socket, sendLock, new
         {
             type = "session.rejected",
             protocolVersion = _options.ProtocolVersion,
@@ -399,18 +457,28 @@ public sealed class RealtimeAudioConnectionHandler
             cancellationToken);
     }
 
-    private static async Task SendControlAsync(
+    private static async ValueTask SendControlAsync(
         WebSocket socket,
+        SemaphoreSlim sendLock,
         object message,
         CancellationToken cancellationToken)
     {
         if (socket.State != WebSocketState.Open) return;
-        var payload = JsonSerializer.SerializeToUtf8Bytes(message);
-        await socket.SendAsync(
-            payload,
-            WebSocketMessageType.Text,
-            endOfMessage: true,
-            cancellationToken);
+        var payload = JsonSerializer.SerializeToUtf8Bytes(message, JsonSerializerOptions.Web);
+        await sendLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (socket.State != WebSocketState.Open) return;
+            await socket.SendAsync(
+                payload,
+                WebSocketMessageType.Text,
+                endOfMessage: true,
+                cancellationToken);
+        }
+        finally
+        {
+            sendLock.Release();
+        }
     }
 
     private static async Task CloseSafelyAsync(

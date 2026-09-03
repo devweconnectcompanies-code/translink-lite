@@ -67,6 +67,8 @@ The ignored `dist/` directory contains the popup, `service-worker.js`, `offscree
 - converts mono audio to 150 ms PCM16LE chunks in an AudioWorklet;
 - streams versioned binary frames to the authenticated backend endpoint;
 - stops safely on protocol, network, or bounded-backpressure failure;
+- sends an initial `en-US` (locally configurable) source speech language using protocol v2;
+- receives generic partial/final transcript events and shows only active state and counters;
 - stops and cleans up on request, tab closure, unsupported navigation, or stream failure.
 
 ## Permissions
@@ -85,7 +87,7 @@ Only one tab can be captured. The service worker rejects competing starts and re
 
 Tab IDs and stream IDs are transient. Stream IDs are passed directly to the offscreen document and never stored. No title, URL, audio sample, or browsing content is uploaded.
 
-The backend requires JWT authentication. Until production login UX exists, local testing stores a short-lived development token in `chrome.storage.local` under `developmentAccessToken`; follow the EXT-001C specification and remove it afterward. No token is bundled or committed.
+The backend requires JWT authentication. Until production login UX exists, local testing stores a short-lived development token in `chrome.storage.local` under `developmentAccessToken`; follow the EXT-001D specification and remove it afterward. A source speech language may be set under `sourceLanguage` (`en-US` is the fallback). No token or AWS credential is bundled or committed.
 
 The unpacked extension defaults to `ws://localhost:5221/api/realtime/audio`, matching the API's `http` launch profile. A custom deployment endpoint can be supplied through the documented local setting and must use `wss://` outside Development. Safe localhost connection lifecycle diagnostics are mirrored to the service-worker console so they remain inspectable if the offscreen document closes after a failure; they never contain the JWT or captured-page metadata.
 
@@ -102,4 +104,4 @@ The unpacked extension defaults to `ws://localhost:5221/api/realtime/audio`, mat
 
 ## Deferred
 
-Later phases will implement production authentication UX, language selection, AWS services, translation, realtime subtitles, reconnect/resume semantics, and measured production scaling.
+Later phases will implement production authentication UX, complete language selection, translation, Web realtime subtitles, reconnect/resume semantics, and measured production scaling. AWS Transcribe is invoked only by the backend; the Extension never receives AWS credentials or SDK logic.

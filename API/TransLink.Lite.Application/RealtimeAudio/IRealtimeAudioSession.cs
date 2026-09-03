@@ -1,16 +1,35 @@
 namespace TransLink.Lite.Application.RealtimeAudio;
 
-public interface IRealtimeAudioSession : IAsyncDisposable
+public interface IRealtimeSpeechTranscriptionSession : IAsyncDisposable
 {
-    ValueTask ConsumeAsync(RealtimeAudioChunk chunk, CancellationToken cancellationToken);
+    Task StartAsync(
+        Func<RealtimeTranscriptEvent, CancellationToken, ValueTask> onTranscript,
+        CancellationToken cancellationToken);
 
-    RealtimeAudioSessionSummary Complete(int protocolViolationCount);
+    ValueTask SendAudioAsync(
+        RealtimeAudioChunk chunk,
+        CancellationToken cancellationToken);
+
+    Task<RealtimeAudioSessionSummary> CompleteAsync(
+        int protocolViolationCount,
+        CancellationToken cancellationToken);
 }
 
-public interface IRealtimeAudioSessionFactory
+public interface IRealtimeSpeechTranscriptionSessionFactory
 {
-    IRealtimeAudioSession Create(
+    IRealtimeSpeechTranscriptionSession Create(
         Guid sessionId,
         Guid authenticatedUserId,
         RealtimeAudioFormat format);
+}
+
+public sealed class RealtimeTranscriptionException : Exception
+{
+    public RealtimeTranscriptionException(string errorCode, Exception? innerException = null)
+        : base("Realtime transcription failed.", innerException)
+    {
+        ErrorCode = errorCode;
+    }
+
+    public string ErrorCode { get; }
 }

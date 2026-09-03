@@ -21,6 +21,8 @@ const CAPTURE_STATE_KEY = "captureState";
 const OFFSCREEN_DOCUMENT_PATH = "offscreen.html";
 const DEVELOPMENT_ACCESS_TOKEN_KEY = "developmentAccessToken";
 const REALTIME_ENDPOINT_KEY = "realtimeEndpoint";
+const SOURCE_LANGUAGE_KEY = "sourceLanguage";
+const DEFAULT_SOURCE_LANGUAGE = "en-US";
 
 let captureState: CaptureSnapshot = { ...IDLE_CAPTURE_STATE };
 let stateLoaded = false;
@@ -37,6 +39,13 @@ function isTransportSnapshot(value: unknown): value is TransportSnapshot {
     typeof candidate.bytesSent === "number" &&
     Number.isSafeInteger(candidate.bytesSent) &&
     candidate.bytesSent >= 0 &&
+    typeof candidate.transcriptionActive === "boolean" &&
+    typeof candidate.partialTranscriptsReceived === "number" &&
+    Number.isSafeInteger(candidate.partialTranscriptsReceived) &&
+    candidate.partialTranscriptsReceived >= 0 &&
+    typeof candidate.finalTranscriptsReceived === "number" &&
+    Number.isSafeInteger(candidate.finalTranscriptsReceived) &&
+    candidate.finalTranscriptsReceived >= 0 &&
     (candidate.errorCode === null || typeof candidate.errorCode === "string")
   );
 }
@@ -136,6 +145,7 @@ async function getRealtimeConfiguration() {
   const stored = await chrome.storage.local.get([
     DEVELOPMENT_ACCESS_TOKEN_KEY,
     REALTIME_ENDPOINT_KEY,
+    SOURCE_LANGUAGE_KEY,
   ]);
   const accessToken = stored[DEVELOPMENT_ACCESS_TOKEN_KEY];
   if (typeof accessToken !== "string" || accessToken.trim().length === 0) {
@@ -143,6 +153,7 @@ async function getRealtimeConfiguration() {
   }
 
   const configuredEndpoint = stored[REALTIME_ENDPOINT_KEY];
+  const configuredSourceLanguage = stored[SOURCE_LANGUAGE_KEY];
   return {
     accessToken: accessToken.trim(),
     endpoint:
@@ -150,6 +161,10 @@ async function getRealtimeConfiguration() {
         ? configuredEndpoint.trim()
         : DEFAULT_REALTIME_ENDPOINT,
     chunkDurationMs: DEFAULT_CHUNK_DURATION_MS,
+    sourceLanguage:
+      typeof configuredSourceLanguage === "string" && configuredSourceLanguage.trim().length > 0
+        ? configuredSourceLanguage.trim()
+        : DEFAULT_SOURCE_LANGUAGE,
   };
 }
 
@@ -196,6 +211,9 @@ async function failCapture(errorCode: CaptureErrorCode): Promise<CommandResponse
           status: "disconnected",
           chunksSent: captureState.transport.chunksSent,
           bytesSent: captureState.transport.bytesSent,
+          transcriptionActive: false,
+          partialTranscriptsReceived: captureState.transport.partialTranscriptsReceived,
+          finalTranscriptsReceived: captureState.transport.finalTranscriptsReceived,
           errorCode: null,
         },
   };
@@ -237,6 +255,9 @@ async function startCapture(tabId: number): Promise<CommandResponse> {
       status: "connecting",
       chunksSent: 0,
       bytesSent: 0,
+      transcriptionActive: false,
+      partialTranscriptsReceived: 0,
+      finalTranscriptsReceived: 0,
       errorCode: null,
     },
   });
