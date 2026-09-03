@@ -14,10 +14,12 @@ public sealed class TransLinkWebApplicationFactory : WebApplicationFactory<Progr
     private const string TestJwtSecret = "integration-test-signing-key-with-at-least-32-bytes";
     private readonly string _connectionString;
     private readonly int _authenticationPermitLimit;
+    private readonly string? _realtimeAllowedOrigin;
 
     public TransLinkWebApplicationFactory(
         string connectionString,
-        int authenticationPermitLimit = 1_000)
+        int authenticationPermitLimit = 1_000,
+        string? realtimeAllowedOrigin = null)
     {
         var connection = new NpgsqlConnectionStringBuilder(connectionString);
         if (string.Equals(
@@ -31,6 +33,7 @@ public sealed class TransLinkWebApplicationFactory : WebApplicationFactory<Progr
 
         _connectionString = connectionString;
         _authenticationPermitLimit = authenticationPermitLimit;
+        _realtimeAllowedOrigin = realtimeAllowedOrigin;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -45,14 +48,20 @@ public sealed class TransLinkWebApplicationFactory : WebApplicationFactory<Progr
         builder.UseSetting("RateLimiting:Authentication:QueueLimit", "0");
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
-            configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            var settings = new Dictionary<string, string?>
             {
                 ["ConnectionStrings:DefaultConnection"] = _connectionString,
                 ["Jwt:SecretKey"] = TestJwtSecret,
                 ["RateLimiting:Authentication:PermitLimit"] = _authenticationPermitLimit.ToString(),
                 ["RateLimiting:Authentication:WindowSeconds"] = "60",
                 ["RateLimiting:Authentication:QueueLimit"] = "0",
-            });
+            };
+            if (_realtimeAllowedOrigin is not null)
+            {
+                settings["RealtimeAudio:AllowedOrigins:0"] = _realtimeAllowedOrigin;
+            }
+
+            configuration.AddInMemoryCollection(settings);
         });
         builder.ConfigureServices(services =>
         {

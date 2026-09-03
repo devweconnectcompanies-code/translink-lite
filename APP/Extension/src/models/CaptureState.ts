@@ -1,3 +1,8 @@
+import {
+  DISCONNECTED_TRANSPORT_STATE,
+  type TransportSnapshot,
+} from "./TransportState";
+
 export type CaptureStatus = "idle" | "starting" | "capturing" | "stopping" | "error";
 
 export type CaptureErrorCode =
@@ -9,6 +14,10 @@ export type CaptureErrorCode =
   | "tab-closed"
   | "unexpected-termination"
   | "capture-busy"
+  | "transport-authentication"
+  | "transport-connection"
+  | "transport-protocol"
+  | "transport-backpressure"
   | "internal-error";
 
 export interface CaptureSnapshot {
@@ -17,6 +26,7 @@ export interface CaptureSnapshot {
   audioLevel: number;
   hasSignal: boolean;
   errorCode: CaptureErrorCode | null;
+  transport: TransportSnapshot;
 }
 
 export const IDLE_CAPTURE_STATE: CaptureSnapshot = {
@@ -25,4 +35,5 @@ export const IDLE_CAPTURE_STATE: CaptureSnapshot = {
   audioLevel: 0,
   hasSignal: false,
   errorCode: null,
+  transport: { ...DISCONNECTED_TRANSPORT_STATE },
 };

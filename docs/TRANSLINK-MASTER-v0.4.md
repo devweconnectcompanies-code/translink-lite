@@ -132,8 +132,7 @@ Detailed implementation documentation is in `backend-architecture.md`; local con
 
 The following are product direction, not current functionality:
 
-- transport-ready browser-tab audio chunking (local capture is implemented in EXT-001B);
-- WebSocket transport and connection lifecycle;
+- AWS-backed consumption of the implemented browser-tab audio transport;
 - realtime audio ingestion, bounded buffers, and backpressure;
 - AWS Transcribe Streaming, Translate, and Polly;
 - translated result delivery to Web;
@@ -205,20 +204,29 @@ Repository hygiene, secret rotation/configuration, reproducible SDK, dependency 
 - add focused validation/testing appropriate to Extension tooling;
 - do not capture or stream audio yet.
 
-#### EXT-001B — Tab Audio Capture Foundation (implemented locally)
+#### EXT-001B — Tab Audio Capture Foundation (completed)
 
 - real `tabCapture` lifecycle using a service worker and offscreen document;
 - local MediaStream/Web Audio processing and playback routing;
 - audio activity measurement and deterministic cleanup;
-- manual Chrome capture validation pending.
+- manually validated stable local capture, playback, metering, and cleanup.
+
+#### EXT-001C — Realtime Audio Transport Foundation (implemented locally)
+
+- AudioWorklet mono PCM16LE chunking with a 150 ms tracked default;
+- authenticated, versioned binary WebSocket transport;
+- generic multi-client contract and server-controlled ephemeral sessions;
+- bounded direct consumption, protocol limits, cancellation, and validation metrics;
+- automated protocol and WebSocket lifecycle tests;
+- manual end-to-end Chrome/API validation pending.
 
 #### Later EXT-001 work
 
-- transport-ready audio chunking and format decisions based on measured browser constraints.
+- measured transport tuning and provider-specific audio optimization.
 
 ### Subsequent milestones
 
-- `RT-001`: authenticated realtime transport, binary audio, lifecycle, reconnection, and backpressure.
+- `RT-001`: production reconnect/resume semantics and distributed transport operations when justified.
 - `AWS-STT-001`: AWS Transcribe Streaming.
 - `AWS-TR-001`: AWS Translate.
 - `WEB-RT-001`: realtime Web rendering and measured end-to-end latency.

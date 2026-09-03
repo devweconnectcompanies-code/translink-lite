@@ -5,6 +5,13 @@ import {
   type ExtensionMessage,
   type OffscreenResponse,
 } from "../messaging/messages";
+import type { TransportErrorCode, TransportSnapshot } from "../models/TransportState";
+import {
+  RealtimeAudioTransport,
+  type RealtimeTransportConfiguration,
+  type RealtimeTransportDiagnostic,
+} from "../realtime/RealtimeAudioTransport";
+import { encodePcm16, TRANSPORT_SAMPLE_RATE_HZ } from "../realtime/protocol";
 
 const LEVEL_UPDATE_INTERVAL_MS = 150;
 const LEVEL_FLOOR_DB = -60;
@@ -16,6 +23,9 @@ let audioContext: AudioContext | null = null;
 let sourceNode: MediaStreamAudioSourceNode | null = null;
 let analyserNode: AnalyserNode | null = null;
 let analysisSinkNode: GainNode | null = null;
+let transportNode: AudioWorkletNode | null = null;
+let transportSinkNode: GainNode | null = null;
+let realtimeTransport: RealtimeAudioTransport | null = null;
 let levelMonitorId: ReturnType<typeof setInterval> | null = null;
 let suppressTrackEnd = false;
 let resumeInProgress = false;
@@ -27,6 +37,31 @@ async function sendBackgroundEvent(message: ExtensionMessage): Promise<void> {
   } catch {
     // The service worker may be restarting; persisted state is reconciled later.
   }
+}
+
+function reportTransportState(state: TransportSnapshot): void {
+  void sendBackgroundEvent({
+    target: "background",
+    type: MessageType.TransportStateChanged,
+    state,
+  });
+}
+
+function reportTransportDiagnostic(diagnostic: RealtimeTransportDiagnostic): void {
+  console.info("[realtime]", diagnostic);
+  void sendBackgroundEvent({
+    target: "background",
+    type: MessageType.TransportDiagnostic,
+    diagnostic,
+  });
+}
+
+function mapTransportError(errorCode: TransportErrorCode): CaptureErrorCode {
+  if (errorCode === "authentication-required") return "transport-authentication";
+  if (errorCode === "backpressure") return "transport-backpressure";
+  if (errorCode === "protocol-error" || errorCode === "server-rejected")
+    return "transport-protocol";
+  return "transport-connection";
 }
 
 function stopLevelMonitor(): void {
@@ -48,6 +83,10 @@ async function releaseCaptureResources(): Promise<void> {
   sourceNode?.disconnect();
   analyserNode?.disconnect();
   analysisSinkNode?.disconnect();
+  transportNode?.disconnect();
+  if (transportNode) transportNode.port.onmessage = null;
+  transportSinkNode?.disconnect();
+  realtimeTransport?.close();
 
   if (audioContext && audioContext.state !== "closed") {
     audioContext.onstatechange = null;
@@ -59,6 +98,9 @@ async function releaseCaptureResources(): Promise<void> {
   sourceNode = null;
   analyserNode = null;
   analysisSinkNode = null;
+  transportNode = null;
+  transportSinkNode = null;
+  realtimeTransport = null;
   resumeInProgress = false;
   smoothedLevel = 0;
 }
@@ -126,7 +168,22 @@ async function handleUnexpectedTermination(
   });
 }
 
-async function startCapture(tabId: number, streamId: string): Promise<OffscreenResponse> {
+async function handleTransportFailure(errorCode: TransportErrorCode): Promise<void> {
+  if (suppressTrackEnd) return;
+  reportTransportState({
+    status: "error",
+    chunksSent: 0,
+    bytesSent: 0,
+    errorCode,
+  });
+  await handleUnexpectedTermination(mapTransportError(errorCode));
+}
+
+async function startCapture(
+  tabId: number,
+  streamId: string,
+  transportConfiguration: RealtimeTransportConfiguration,
+): Promise<OffscreenResponse> {
   if (mediaStream !== null) {
     return { ok: false, errorCode: "capture-busy" };
   }
@@ -164,7 +221,10 @@ async function startCapture(tabId: number, streamId: string): Promise<OffscreenR
       return { ok: false, errorCode: "stream-acquisition" };
     }
 
-    const context = new AudioContext({ latencyHint: "interactive" });
+    const context = new AudioContext({
+      latencyHint: "interactive",
+      sampleRate: TRANSPORT_SAMPLE_RATE_HZ,
+    });
     audioContext = context;
     await context.resume();
     if (context.state !== "running") {
@@ -194,6 +254,49 @@ async function startCapture(tabId: number, streamId: string): Promise<OffscreenR
     analyser.connect(analysisSink);
     analysisSink.connect(context.destination);
 
+    const transport = new RealtimeAudioTransport(
+      transportConfiguration,
+      reportTransportState,
+      (errorCode) => void handleTransportFailure(errorCode),
+      reportTransportDiagnostic,
+    );
+    realtimeTransport = transport;
+    try {
+      await transport.connect(context.sampleRate);
+    } catch (error) {
+      const category = error instanceof Error ? error.message : "connection-failed";
+      console.warn("[realtime] connection.failed", { category });
+      const errorCode: TransportErrorCode =
+        category === "server-rejected" || category === "protocol-error"
+          ? "server-rejected"
+          : "connection-failed";
+      await releaseCaptureResources();
+      return { ok: false, errorCode: mapTransportError(errorCode) };
+    }
+
+    await context.audioWorklet.addModule(chrome.runtime.getURL("audio-worklet.js"));
+    const chunker = new AudioWorkletNode(context, "translink-pcm-chunker", {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      channelCount: 1,
+      outputChannelCount: [1],
+      processorOptions: {
+        chunkDurationMs: transportConfiguration.chunkDurationMs,
+      },
+    });
+    transportNode = chunker;
+    const transportSink = context.createGain();
+    transportSinkNode = transportSink;
+    transportSink.gain.value = 0;
+    chunker.port.onmessage = (event: MessageEvent<unknown>) => {
+      if (event.data instanceof Float32Array) {
+        transport.send(encodePcm16(event.data));
+      }
+    };
+    source.connect(chunker);
+    chunker.connect(transportSink);
+    transportSink.connect(context.destination);
+
     audioTrack.onended = () => void handleUnexpectedTermination();
 
     startLevelMonitor(analyser);
@@ -214,6 +317,9 @@ async function startCapture(tabId: number, streamId: string): Promise<OffscreenR
 }
 
 async function stopCapture(): Promise<OffscreenResponse> {
+  if (realtimeTransport) {
+    await realtimeTransport.stop();
+  }
   await releaseCaptureResources();
   return { ok: true };
 }
@@ -229,7 +335,11 @@ chrome.runtime.onMessage.addListener(
     void (async () => {
       switch (message.type) {
         case MessageType.OffscreenStartCapture:
-          sendResponse(await startCapture(message.tabId, message.streamId));
+          sendResponse(await startCapture(
+            message.tabId,
+            message.streamId,
+            message.transport,
+          ));
           break;
         case MessageType.OffscreenStopCapture:
           sendResponse(await stopCapture());

@@ -43,8 +43,9 @@ public sealed class PostgreSqlApiFixture : IAsyncLifetime
     }
 
     public TransLinkWebApplicationFactory CreateFactory(
-        int authenticationPermitLimit = 1_000) =>
-        new(ConnectionString, authenticationPermitLimit);
+        int authenticationPermitLimit = 1_000,
+        string? realtimeAllowedOrigin = null) =>
+        new(ConnectionString, authenticationPermitLimit, realtimeAllowedOrigin);
 
     public async Task DisposeAsync()
     {

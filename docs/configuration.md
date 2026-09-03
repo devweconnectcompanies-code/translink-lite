@@ -104,6 +104,46 @@ Healthy checks return HTTP `200`. Readiness returns HTTP `503` for both `Degrade
 
 In a future AWS deployment, container/process liveness should use `/health/live`, while load balancer target health and traffic readiness should use `/health/ready`.
 
+## Realtime audio transport
+
+Safe transport defaults are tracked under `RealtimeAudio`:
+
+| Key | Default | Purpose |
+|---|---:|---|
+| `ProtocolVersion` | `1` | Required control/binary protocol version |
+| `MaxBinaryFrameBytes` | `65560` | Maximum complete binary WebSocket message |
+| `MaxControlMessageBytes` | `4096` | Maximum complete JSON control message |
+| `ChunkDurationMs` | `150` | Required client PCM chunk duration |
+| `HandshakeTimeoutSeconds` | `10` | Time allowed for `session.start` |
+| `IdleTimeoutSeconds` | `15` | Maximum interval without a client message |
+| `MaxProtocolViolations` | `1` | Violations allowed before closing |
+| `AllowedOrigins` | empty in Development | Exact browser-origin allowlist; required outside Development |
+
+Numeric settings are startup-validated. Non-development streaming requires HTTPS/WSS and at least one exact allowed origin. Development accepts an empty list because unpacked extension IDs vary, but an exact local ID can be configured without tracking it:
+
+```bash
+dotnet user-secrets set "RealtimeAudio:AllowedOrigins:0" "chrome-extension://<UNPACKED_EXTENSION_ID>" --project API/TransLink.Lite.API
+```
+
+Every connection still requires JWT, and native clients may omit `Origin`. Production deployments must supply their approved browser origins through deployment configuration; no developer extension ID belongs in tracked defaults.
+
+For local Extension testing, obtain a short-lived token through the existing register/login endpoint and set it only in unpacked-extension local storage:
+
+```javascript
+chrome.storage.local.set({ developmentAccessToken: "<DEVELOPMENT_JWT>" })
+chrome.storage.local.remove("realtimeEndpoint") // uses ws://localhost:5221/api/realtime/audio
+```
+
+Start that matching API profile with `dotnet run --project API/TransLink.Lite.API --launch-profile http`. Custom and production endpoints can be set with `realtimeEndpoint`, but credentials, query strings, and fragments are rejected and production must use `wss://`.
+
+Remove it after testing:
+
+```javascript
+chrome.storage.local.remove("developmentAccessToken")
+```
+
+Never commit, log, or paste a real token into documentation. Full client login, production token storage, and refresh are deferred.
+
 ## Startup behavior
 
 The API fails fast with a safe configuration error when:
@@ -116,6 +156,9 @@ The API fails fast with a safe configuration error when:
 - `RateLimiting:Authentication:PermitLimit` is not greater than zero;
 - `RateLimiting:Authentication:WindowSeconds` is not greater than zero;
 - `RateLimiting:Authentication:QueueLimit` is negative.
+- realtime protocol version is not `1`;
+- realtime frame/control limits, chunk duration, timeouts, or violation limit fall outside their documented ranges.
+- `RealtimeAudio:AllowedOrigins` is empty outside Development or IntegrationTesting.
 
 Validation errors identify the missing configuration key but never include its value.
 

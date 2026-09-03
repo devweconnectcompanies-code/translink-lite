@@ -4,6 +4,11 @@ import {
   type CaptureSnapshot,
 } from "../models/CaptureState";
 import { isSupportedTabUrl } from "../models/tabEligibility";
+import type { TransportSnapshot } from "../models/TransportState";
+import {
+  DEFAULT_CHUNK_DURATION_MS,
+  DEFAULT_REALTIME_ENDPOINT,
+} from "../realtime/protocol";
 import {
   isTargetedMessage,
   MessageType,
@@ -14,9 +19,27 @@ import {
 
 const CAPTURE_STATE_KEY = "captureState";
 const OFFSCREEN_DOCUMENT_PATH = "offscreen.html";
+const DEVELOPMENT_ACCESS_TOKEN_KEY = "developmentAccessToken";
+const REALTIME_ENDPOINT_KEY = "realtimeEndpoint";
 
 let captureState: CaptureSnapshot = { ...IDLE_CAPTURE_STATE };
 let stateLoaded = false;
+
+function isTransportSnapshot(value: unknown): value is TransportSnapshot {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Partial<TransportSnapshot>;
+  return (
+    ["disconnected", "connecting", "connected", "streaming", "stopping", "error"]
+      .includes(candidate.status ?? "") &&
+    typeof candidate.chunksSent === "number" &&
+    Number.isSafeInteger(candidate.chunksSent) &&
+    candidate.chunksSent >= 0 &&
+    typeof candidate.bytesSent === "number" &&
+    Number.isSafeInteger(candidate.bytesSent) &&
+    candidate.bytesSent >= 0 &&
+    (candidate.errorCode === null || typeof candidate.errorCode === "string")
+  );
+}
 
 function isCaptureSnapshot(value: unknown): value is CaptureSnapshot {
   if (typeof value !== "object" || value === null) return false;
@@ -27,7 +50,8 @@ function isCaptureSnapshot(value: unknown): value is CaptureSnapshot {
     ) &&
     (candidate.tabId === null || typeof candidate.tabId === "number") &&
     typeof candidate.audioLevel === "number" &&
-    typeof candidate.hasSignal === "boolean"
+    typeof candidate.hasSignal === "boolean" &&
+    isTransportSnapshot(candidate.transport)
   );
 }
 
@@ -108,6 +132,27 @@ async function getTabStreamId(tabId: number): Promise<string> {
   });
 }
 
+async function getRealtimeConfiguration() {
+  const stored = await chrome.storage.local.get([
+    DEVELOPMENT_ACCESS_TOKEN_KEY,
+    REALTIME_ENDPOINT_KEY,
+  ]);
+  const accessToken = stored[DEVELOPMENT_ACCESS_TOKEN_KEY];
+  if (typeof accessToken !== "string" || accessToken.trim().length === 0) {
+    return null;
+  }
+
+  const configuredEndpoint = stored[REALTIME_ENDPOINT_KEY];
+  return {
+    accessToken: accessToken.trim(),
+    endpoint:
+      typeof configuredEndpoint === "string" && configuredEndpoint.trim().length > 0
+        ? configuredEndpoint.trim()
+        : DEFAULT_REALTIME_ENDPOINT,
+    chunkDurationMs: DEFAULT_CHUNK_DURATION_MS,
+  };
+}
+
 async function sendToOffscreen(message: ExtensionMessage): Promise<OffscreenResponse> {
   try {
     const response: unknown = await chrome.runtime.sendMessage(message);
@@ -127,12 +172,32 @@ async function failCapture(errorCode: CaptureErrorCode): Promise<CommandResponse
     // State still transitions to a safe error if cleanup itself fails.
   }
 
+  const transportError = errorCode.startsWith("transport-");
   const state: CaptureSnapshot = {
     status: "error",
     tabId: null,
     audioLevel: 0,
     hasSignal: false,
     errorCode,
+    transport: transportError
+      ? {
+          ...captureState.transport,
+          status: "error",
+          errorCode:
+            errorCode === "transport-authentication"
+              ? "authentication-required"
+              : errorCode === "transport-backpressure"
+                ? "backpressure"
+                : errorCode === "transport-protocol"
+                  ? "protocol-error"
+                  : "connection-failed",
+        }
+      : {
+          status: "disconnected",
+          chunksSent: captureState.transport.chunksSent,
+          bytesSent: captureState.transport.bytesSent,
+          errorCode: null,
+        },
   };
   await setCaptureState(state);
   return { ok: false, state, errorCode };
@@ -156,12 +221,24 @@ async function startCapture(tabId: number): Promise<CommandResponse> {
     return failCapture("unsupported-tab");
   }
 
+
+  const transport = await getRealtimeConfiguration();
+  if (!transport) {
+    return failCapture("transport-authentication");
+  }
+
   await setCaptureState({
     status: "starting",
     tabId,
     audioLevel: 0,
     hasSignal: false,
     errorCode: null,
+    transport: {
+      status: "connecting",
+      chunksSent: 0,
+      bytesSent: 0,
+      errorCode: null,
+    },
   });
 
   try {
@@ -172,6 +249,7 @@ async function startCapture(tabId: number): Promise<CommandResponse> {
       type: MessageType.OffscreenStartCapture,
       tabId,
       streamId,
+      transport,
     });
 
     if (!response.ok) return failCapture(response.errorCode);
@@ -182,6 +260,7 @@ async function startCapture(tabId: number): Promise<CommandResponse> {
       audioLevel: 0,
       hasSignal: false,
       errorCode: null,
+      transport: captureState.transport,
     };
     await setCaptureState(state);
     return { ok: true, state };
@@ -207,7 +286,13 @@ async function stopCapture(): Promise<CommandResponse> {
     return { ok: true, state: captureState };
   }
 
-  await setCaptureState({ ...captureState, status: "stopping", audioLevel: 0, hasSignal: false });
+  await setCaptureState({
+    ...captureState,
+    status: "stopping",
+    audioLevel: 0,
+    hasSignal: false,
+    transport: { ...captureState.transport, status: "stopping" },
+  });
   const response = await sendToOffscreen({
     target: "offscreen",
     type: MessageType.OffscreenStopCapture,
@@ -243,6 +328,15 @@ async function handleOffscreenEvent(message: ExtensionMessage): Promise<void> {
         };
         await broadcastCaptureState();
       }
+      break;
+    case MessageType.TransportStateChanged:
+      if (captureState.status === "starting" || captureState.status === "capturing") {
+        captureState = { ...captureState, transport: message.state };
+        await broadcastCaptureState();
+      }
+      break;
+    case MessageType.TransportDiagnostic:
+      console.info("[realtime]", message.diagnostic);
       break;
     case MessageType.CaptureStopped:
       if (message.errorCode) {

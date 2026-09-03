@@ -18,6 +18,10 @@ const ERROR_MESSAGES: Record<CaptureErrorCode, string> = {
   "tab-closed": "Capture stopped because the selected tab was closed.",
   "unexpected-termination": "The tab audio stream ended unexpectedly. You can retry.",
   "capture-busy": "Another capture operation is already active.",
+  "transport-authentication": "A development access token is required before streaming.",
+  "transport-connection": "The realtime audio connection could not be established or was lost.",
+  "transport-protocol": "The server rejected the realtime audio protocol.",
+  "transport-backpressure": "Streaming stopped because the network could not keep up safely.",
   "internal-error": "Capture is temporarily unavailable. Reload the extension and retry.",
 };
 
@@ -38,7 +42,15 @@ export function CaptureControl({
           <span className="capture-dot" aria-hidden="true" />
           <div>
             <strong>Capturing tab audio</strong>
-            <span>{capture.hasSignal ? "Audio signal detected" : "Listening for audio…"}</span>
+            <span>
+              {capture.transport.status === "streaming"
+                ? `Streaming · ${capture.transport.chunksSent} chunks`
+                : capture.transport.status === "connected"
+                  ? "Transport connected"
+                  : capture.hasSignal
+                    ? "Audio signal detected"
+                    : "Listening for audio…"}
+            </span>
           </div>
         </div>
         <div

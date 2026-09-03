@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented locally. Automated validation is complete; manual Google Chrome capture validation is pending.
+Completed, manually validated in Google Chrome, published, and verified by Backend CI.
 
 ## Scope
 
@@ -116,7 +116,7 @@ dotnet test TransLink.Lite.slnx --no-build --configuration Release
 git diff --check
 ```
 
-Manual Chrome capture must not be marked complete until the owner verifies real audio and lifecycle behavior.
+Manual Chrome capture was validated by the owner after the audio graph correction.
 
 Automated results on 2026-09-01:
 

@@ -1,10 +1,10 @@
 # TransLink Lite browser extension
 
-This Manifest V3 thin client discovers Chrome tabs and captures audio locally from one explicitly selected tab. It does not upload, record, translate, or send audio to the backend.
+This Manifest V3 thin client discovers Chrome tabs, captures one explicitly selected tab, and streams bounded PCM audio to the authenticated backend. It does not record, persist, translate, or send audio directly to external providers.
 
 ## Architecture boundary
 
-The Extension is independently built and deployed from the .NET API. The popup owns user selection and controls, a service worker coordinates lifecycle, and an offscreen document owns the long-lived MediaStream and Web Audio graph.
+The Extension is independently built and deployed from the .NET API. The popup owns user selection and controls, a service worker coordinates lifecycle, and an offscreen document owns the long-lived MediaStream, Web Audio graph, AudioWorklet, and WebSocket.
 
 ```text
 Popup user action
@@ -13,10 +13,11 @@ Popup user action
   -> offscreen document
   -> MediaStreamAudioSourceNode
        |-> AudioContext.destination (local playback)
-       `-> AnalyserNode -> muted GainNode -> destination (level analysis)
+       |-> AnalyserNode -> muted GainNode -> destination (level analysis)
+       `-> AudioWorklet -> PCM16 chunks -> authenticated WebSocket
 ```
 
-Capture continues when the popup closes. Routing the captured stream once to `AudioContext.destination` restores local playback that Chrome suppresses during tab capture. Backend business logic, credentials, database access, AWS access, and translation orchestration do not belong here.
+Capture and streaming continue when the popup closes. Routing the captured stream once to `AudioContext.destination` restores local playback that Chrome suppresses during tab capture. Backend business logic, database access, AWS access, and translation orchestration do not belong here.
 
 ## Requirements
 
@@ -63,6 +64,9 @@ The ignored `dist/` directory contains the popup, `service-worker.js`, `offscree
 - exposes idle, starting, capturing, stopping, and safe error states;
 - displays a lightweight RMS-derived audio-level indicator;
 - restores local source-tab playback through Web Audio;
+- converts mono audio to 150 ms PCM16LE chunks in an AudioWorklet;
+- streams versioned binary frames to the authenticated backend endpoint;
+- stops safely on protocol, network, or bounded-backpressure failure;
 - stops and cleans up on request, tab closure, unsupported navigation, or stream failure.
 
 ## Permissions
@@ -71,14 +75,19 @@ The ignored `dist/` directory contains the popup, `service-worker.js`, `offscree
 - `storage`: stores the transient selection locally and a minimal capture snapshot in session storage.
 - `tabCapture`: obtains audio from the one tab selected by the user.
 - `offscreen`: hosts MediaStream and Web Audio outside the short-lived popup.
+- `http://localhost/*` and `https://localhost/*`: restrict the development backend connection to localhost; production endpoint permissions remain deployment work.
 
-Chrome 116 is required so a stream ID created by the service worker can be consumed by the offscreen document. There are no host permissions, microphone, remote-code, or backend permissions.
+Chrome 116 is required so a stream ID created by the service worker can be consumed by the offscreen document. There are no broad host permissions, microphone permissions, remote code, or direct AWS permissions.
 
 ## Capture lifecycle and privacy
 
-Only one tab can be captured. The service worker rejects competing starts and reconciles minimal session state after restart. The offscreen document never persists raw audio: it measures signal level in memory on a timer independent from hidden-document rendering, routes audio directly to local playback, and releases tracks, nodes, timers, and `AudioContext` on stop.
+Only one tab can be captured. The service worker rejects competing starts and reconciles minimal session state after restart. The offscreen document never persists raw audio: it measures signal level, routes audio directly to local playback, sends bounded binary chunks, and releases tracks, nodes, timers, WebSocket, and `AudioContext` on stop.
 
 Tab IDs and stream IDs are transient. Stream IDs are passed directly to the offscreen document and never stored. No title, URL, audio sample, or browsing content is uploaded.
+
+The backend requires JWT authentication. Until production login UX exists, local testing stores a short-lived development token in `chrome.storage.local` under `developmentAccessToken`; follow the EXT-001C specification and remove it afterward. No token is bundled or committed.
+
+The unpacked extension defaults to `ws://localhost:5221/api/realtime/audio`, matching the API's `http` launch profile. A custom deployment endpoint can be supplied through the documented local setting and must use `wss://` outside Development. Safe localhost connection lifecycle diagnostics are mirrored to the service-worker console so they remain inspectable if the offscreen document closes after a failure; they never contain the JWT or captured-page metadata.
 
 ## Manual capture validation
 
@@ -93,4 +102,4 @@ Tab IDs and stream IDs are transient. Stream IDs are passed directly to the offs
 
 ## Deferred
 
-Later phases will implement transport-ready audio chunking, WebSocket transport, backend sessions, authentication, language selection, AWS services, translation, and realtime subtitles.
+Later phases will implement production authentication UX, language selection, AWS services, translation, realtime subtitles, reconnect/resume semantics, and measured production scaling.

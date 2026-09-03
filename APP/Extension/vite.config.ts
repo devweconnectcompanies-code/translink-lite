@@ -11,11 +11,14 @@ export default defineConfig({
         popup: "index.html",
         offscreen: "offscreen.html",
         serviceWorker: "src/background/serviceWorker.ts",
+        audioWorklet: "src/offscreen/audioWorklet.ts",
       },
       output: {
         entryFileNames: (chunkInfo) =>
-          chunkInfo.name === "serviceWorker"
-            ? "service-worker.js"
+          chunkInfo.name === "serviceWorker" || chunkInfo.name === "audioWorklet"
+            ? chunkInfo.name === "serviceWorker"
+              ? "service-worker.js"
+              : "audio-worklet.js"
             : "assets/[name]-[hash].js",
         chunkFileNames: "assets/[name]-[hash].js",
         assetFileNames: "assets/[name]-[hash][extname]",

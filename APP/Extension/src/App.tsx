@@ -131,6 +131,12 @@ export default function App() {
       audioLevel: 0,
       hasSignal: false,
       errorCode: null,
+      transport: {
+        status: "connecting",
+        chunksSent: 0,
+        bytesSent: 0,
+        errorCode: null,
+      },
     });
     const response = await startCapture(selectedTab.id);
     setCaptureState(response.state);

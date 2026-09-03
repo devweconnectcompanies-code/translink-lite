@@ -23,7 +23,7 @@ TransLink-Lite/
 └── TransLink.Lite.slnx
 ```
 
-The repository is a modular-monolith baseline. It does not yet contain realtime audio transport or AWS translation services.
+The repository is a modular monolith. It now contains an authenticated realtime audio-ingestion boundary and ephemeral validation sink; it does not contain AWS translation services.
 
 ## Projects and dependencies
 
@@ -55,6 +55,7 @@ Domain has no dependency on ASP.NET Core, EF Core, Infrastructure, or API. Contr
 | `AuthService` | Register, normalize email, enforce uniqueness, hash passwords, authenticate, and issue tokens |
 | `UserProfileService` | Read and update the authenticated user's profile |
 | `TranslationSessionService` | Create and retrieve sessions owned by the authenticated user |
+| `RealtimeAudioProtocol` | Parse and validate versioned generic control and binary-audio frames |
 
 Persistence abstractions are specific: `IUserRepository` and `ITranslationSessionRepository`. No generic repository abstraction is used. Request and response DTOs prevent binding domain entities directly and do not expose `UserId`, `PasswordHash`, or `NormalizedEmail` as user-controlled fields.
 
@@ -92,6 +93,7 @@ Controllers are thin adapters: they obtain the authenticated user identifier, in
 | `GET` | `/health` | Anonymous | Temporary liveness compatibility alias |
 | `GET` | `/health/live` | Anonymous | Process liveness |
 | `GET` | `/health/ready` | Anonymous | PostgreSQL readiness |
+| `GET` | `/api/realtime/audio` | Bearer JWT + WebSocket upgrade | Ephemeral realtime PCM audio ingestion |
 
 The former collection-level `GET /api/Users` and `POST /api/Users` endpoints have been removed.
 
@@ -113,16 +115,28 @@ ASP.NET Core `ProblemDetails` is the public error contract. The global handler m
 
 Liveness checks only the API process. Readiness checks PostgreSQL and returns `503` when it is unavailable while liveness remains healthy. Responses expose only aggregate status.
 
+## Realtime audio transport
+
+`/api/realtime/audio` is a generic multi-client WebSocket contract. Authentication binds a server-generated ephemeral transport session to the JWT user. The protocol contains no Chrome tab, popup, or service-worker concepts and remains implementable by future Web, Mobile, and Desktop clients.
+
+The local Extension default targets `ws://localhost:5221/api/realtime/audio`, matching the Development HTTP launch profile. Non-development instances require WSS and an explicitly configured exact browser-origin allowlist. Unpacked-extension IDs are not embedded in production configuration.
+
+Control messages are versioned JSON; audio uses a compact binary header plus mono signed PCM16 little-endian payload. The API validates handshake order, format, version, message size, payload length, sequence continuity, monotonic elapsed time, and lifecycle transitions.
+
+The receive loop rents one bounded buffer and awaits direct sink consumption before receiving another frame. `IRealtimeAudioSessionFactory` is an Application abstraction; Infrastructure implements a non-persistent validation sink that retains only counters and emits a safe completion summary. No audio reaches PostgreSQL or disk.
+
+One connection currently remains on one API instance. The client contract exposes no process affinity, and future AWS/shared processing can replace the sink without rewriting clients. Distributed coordination is intentionally deferred.
+
 ## Configuration and secrets
 
 Tracked configuration contains only non-sensitive defaults. Local database credentials and the JWT signing key use .NET User Secrets; deployed environments must use their secret-management facility. See `configuration.md`.
 
 ## Automated verification
 
-The solution contains 30 unit tests and 26 integration tests (56 total, none skipped in the approved baseline). Integration tests cover the HTTP API, PostgreSQL constraints, ownership, errors, health, and rate limiting using `WebApplicationFactory`, Testcontainers, PostgreSQL 17 Alpine, an ephemeral database, and real migrations. Guards prevent targeting `translink_lite_dev`.
+The approved baseline contained 30 unit tests and 26 integration tests. EXT-001C adds protocol unit tests and authenticated WebSocket integration coverage for lifecycle, ordering, malformed/oversized input, and cleanup. Integration tests continue using `WebApplicationFactory`, Testcontainers, PostgreSQL 17 Alpine, an ephemeral database, and real migrations. Guards prevent targeting `translink_lite_dev`.
 
 GitHub Actions runs on `ubuntu-latest` for pushes and pull requests to `main`, and manual dispatch. It resolves the SDK from `global.json`, restores, audits NuGet packages, builds Release, and runs the complete test suite. The first published baseline run succeeded.
 
 ## Current boundaries
 
-Not yet implemented: Chrome tab/audio integration, WebSockets, realtime transport, AWS Transcribe/Translate/Polly, the audio/backpressure pipeline, distributed infrastructure, production cloud deployment, external observability, calls, billing, organizations, or enterprise modules.
+Not yet implemented: AWS Transcribe/Translate/Polly, translated result delivery, durable realtime orchestration, production authentication UX, automatic reconnect/session resume, distributed infrastructure, production cloud deployment, external observability, calls, billing, organizations, or enterprise modules.
