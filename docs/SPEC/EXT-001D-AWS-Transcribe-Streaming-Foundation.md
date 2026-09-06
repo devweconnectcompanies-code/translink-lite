@@ -55,6 +55,16 @@ The minimum IAM action for this SDK HTTP/2 streaming path is:
 
 `Resource: "*"` is required because this streaming action does not support resource-level scoping. Do not grant `AdministratorAccess`. The configured region must offer Transcribe Streaming. Normal `/health` and `/health/ready` do not make a paid provider request or require local AWS credentials.
 
+For local IAM Identity Center validation, the Infrastructure project includes the AWS SDK SSO and SSO OIDC support assemblies. A developer may select their authenticated local profile for only the API process:
+
+```bash
+AWS_PROFILE=translink-dev \
+AwsTranscribe__Region=us-east-1 \
+dotnet run --project API/TransLink.Lite.API --launch-profile http
+```
+
+`translink-dev` is a local developer profile, not a production configuration requirement. Production continues using the standard AWS credential chain and a managed workload IAM role. Permanent access keys are not required.
+
 ## Privacy, observability, and cost
 
 Structured logs contain session/user correlation IDs, provider category, region, language, sample rate, duration, byte/chunk counts, result counts, and safe failure categories. They never contain audio, transcript text, JWTs, browser metadata, credentials, signed requests, or provider exception details. Audio and transcript text exist only in bounded memory and realtime frames.

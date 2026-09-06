@@ -150,6 +150,16 @@ Never commit, log, or paste a real token into documentation. Full client login, 
 
 Credentials are resolved only through the standard AWS SDK credential provider chain. Developers may select a local AWS CLI profile or use temporary environment credentials; deployed workloads should use a managed IAM role. Never place AWS credentials in tracked configuration, client storage, test fixtures, or documentation. See `SPEC/EXT-001D-AWS-Transcribe-Streaming-Foundation.md` for least-privilege IAM and manual validation.
 
+For local IAM Identity Center testing after `aws sso login --profile translink-dev`, scope the developer profile and region to the API process:
+
+```bash
+AWS_PROFILE=translink-dev \
+AwsTranscribe__Region=us-east-1 \
+dotnet run --project API/TransLink.Lite.API --launch-profile http
+```
+
+The profile name is a local development convention only. Production does not depend on it and should use a managed workload IAM role through the same standard credential chain. Permanent access keys are not required.
+
 ## Startup behavior
 
 The API fails fast with a safe configuration error when:
