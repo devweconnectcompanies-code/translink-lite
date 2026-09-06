@@ -92,7 +92,11 @@ Unit tests cover language validation, partial/final mapping, and bounded option 
 12. Inspect safe logs and database/filesystem: no content, credential, audio, or transcript was persisted.
 13. Remove the temporary JWT and language setting, stop the API, and unset temporary AWS environment variables/profile selection.
 
-Real AWS success must not be claimed until the owner completes this procedure.
+### Validation result
+
+Manual end-to-end validation passed with real English browser-tab audio in Edge Chromium, the local authenticated API, IAM Identity Center profile credentials, and AWS Transcribe Streaming in `us-east-1`. Protocol v2 negotiation succeeded, partial and final transcript events reached the extension, and Stop returned the extension to an idle, restartable state without a user-visible error. No raw transcript or credential material is recorded here.
+
+The development JWT exposed during manual diagnostics is retired validation material and must not be reused. Remove `developmentAccessToken` from browser extension storage after validation; never replace it with a permanent credential.
 
 ## Deferred work
 

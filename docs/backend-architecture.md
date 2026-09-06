@@ -140,4 +140,4 @@ GitHub Actions runs on `ubuntu-latest` for pushes and pull requests to `main`, a
 
 ## Current boundaries
 
-Not yet implemented: AWS Translate/Polly, translated result delivery, durable realtime orchestration, Web subscriber routing/UI, production authentication UX, automatic reconnect/session resume, distributed infrastructure, production cloud deployment, external observability, calls, billing, organizations, or enterprise modules. AWS Transcribe real-cloud behavior still requires owner-run manual validation.
+Not yet implemented: AWS Translate/Polly, translated result delivery, durable realtime orchestration, Web subscriber routing/UI, production authentication UX, automatic reconnect/session resume, distributed infrastructure, production cloud deployment, external observability, calls, billing, organizations, or enterprise modules. AWS Transcribe Streaming has been validated manually with real browser-tab audio, IAM Identity Center credentials, partial and final transcript events, and a clean stop lifecycle.
