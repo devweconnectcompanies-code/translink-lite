@@ -10,6 +10,7 @@ The Extension is an audio producer and the standalone Blazor WebAssembly Web app
 
 - `APP/Extension`: React, TypeScript, and Vite.
 - `APP/Web`: Blazor WebAssembly, .NET 10, and C#.
+- Backend: ASP.NET Core, .NET 10, and C#.
 
 The persisted `TranslationSession` is not reused because its durable lifecycle does not match an ephemeral connection. Session IDs are random server-generated GUIDs. Possession is not authorization: lookup also requires the JWT-derived owner ID.
 
@@ -57,3 +58,13 @@ Unit tests cover ownership, unknown/foreign access, ordering, bounded overflow i
 ## Acceptance and limitations
 
 Acceptance requires real AWS delivery to both clients, owner authorization, no observer audio, multiple ordered finals, isolated Web disconnect, clean producer Stop, and no persistence, leakage, playback, or protocol regression. Limitations are future-events-only delivery, single-instance affinity, manual reconnect, owner-only access, bounded UI lines, and temporary development token entry pending production auth UX.
+
+## Manual E2E validation result
+
+**Result: PASS — 2026-09-07.**
+
+Manual validation used real English speech from a YouTube browser tab with an `en-US` source and `es` target. The complete flow passed through the Extension producer, authenticated `translink.realtime.v3` WebSocket transport, ASP.NET Core API, real AWS Transcribe Streaming, real AWS Translate, process-local realtime fan-out, and the Blazor WebAssembly observer. The Web client discovered the owned active session and received ordered future `transcript.final` and `translation.final` events while the Extension continued receiving its own output.
+
+Explicit Web disconnect cleared its ephemeral subtitles without interrupting the producer, Transcribe, Translate, or Extension output. Manual reconnect to the still-active producer resumed delivery of new future events without replay. Stopping the producer propagated session completion, moved Web to the ended state, and cleared subtitle state.
+
+An expired local IAM Identity Center session initially prevented AWS Transcribe startup. Refreshing the `translink-dev` SSO session resolved the environment condition; investigation confirmed that authentication and protocol v3 negotiation were working and that no product-code correction was required.
