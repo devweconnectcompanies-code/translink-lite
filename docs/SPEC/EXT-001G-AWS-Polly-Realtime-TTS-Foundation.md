@@ -69,6 +69,25 @@ Do not grant `AmazonPollyFullAccess`. IAM changes and permission-set reprovision
 8. Verify Off clears speech, re-enable resumes future speech, Web disconnect leaves the producer healthy, and producer Stop clears playback.
 9. Remove temporary tokens and stop both services.
 
+## Manual E2E validation result
+
+Status: **PASS** on 2026-09-07.
+
+The end-to-end path was validated with real English YouTube tab audio, the Chrome Extension producer, the local API, AWS Transcribe Streaming, AWS Translate, AWS Polly, and the Blazor WebAssembly observer. The test used source language `en-US`, target language `es`, the `translink.realtime.v3` protocol, and IAM Identity Center profile-based development credentials. No credential or JWT value is recorded here.
+
+The validated scenarios were:
+
+- Extension capture produced multiple real final transcriptions and Spanish translations.
+- Active-session discovery found the live `en-US` to `es` session, and the authorized Web observer received original and translated text continuously.
+- Enabling translated audio produced audible Spanish speech through real Polly synthesis; disabling it stopped speech without interrupting text transcription or translation.
+- Re-enabling translated audio resumed future speech without restarting the producer session.
+- Producer Stop propagated session completion to Web, changed the observer state to Ended, disabled speech, and cleared the playback queue.
+- A subsequent producer session started successfully.
+- Disconnecting the observer cleared its speech state and queue without interrupting the producer or its transcription and translation pipeline.
+- Reconnecting to the active producer session resumed future realtime translations and translated speech without replaying history or restarting capture.
+
+Operationally, local development requires current IAM Identity Center authentication and the least-privilege `polly:SynthesizeSpeech` permission in addition to the existing Transcribe and Translate permissions. API, Web, and Extension must use the same authorized development session. Temporary development JWTs must be removed after validation and must never be stored in source, documentation, or logs.
+
 ## Acceptance and known limitations
 
 Acceptance requires real Transcribe, Translate, Polly, text continuity, audible ordered Spanish segments, bounded near-live behavior, explicit demand, clean cancellation, and failure isolation. Limitations are segment-level speech, MP3 whole-segment buffering, one Spanish voice mapping, process-local affinity, no replay, no distributed backplane, and no production latency/load/SLA claim.
