@@ -31,6 +31,13 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: APP/Extension/package-lock.json
+
       - name: Verify .NET SDK resolution
         run: dotnet --version
 
@@ -55,3 +62,12 @@ jobs:
 
       - name: Run automated tests
         run: dotnet test TransLink.Lite.slnx --no-build --configuration Release
+
+      - name: Validate Extension
+        working-directory: APP/Extension
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+          npm audit

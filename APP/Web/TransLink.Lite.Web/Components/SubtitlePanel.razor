@@ -1,0 +1,20 @@
+<section class="stage" aria-live="polite">
+    <div class="meta"><span>Source: @SourceLanguage</span><span>Target: @TargetLanguage</span><span>Connection: @State.Status</span></div>
+    @if (State.Lines.Count == 0)
+    {
+        <p class="empty">@(State.Status == ObserverConnectionStatus.Ended ? "The producer session ended." : "Waiting for realtime subtitles…")</p>
+    }
+    else
+    {
+        @foreach (var line in State.Lines)
+        {
+            <article @key="line.Sequence"><p>@line.Original</p><strong>@(line.Translation ?? "Translating…")</strong></article>
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public RealtimeObserverState State { get; set; } = null!;
+    [Parameter] public string SourceLanguage { get; set; } = "—";
+    [Parameter] public string TargetLanguage { get; set; } = "—";
+}

@@ -110,7 +110,7 @@ Safe transport defaults are tracked under `RealtimeAudio`:
 
 | Key | Default | Purpose |
 |---|---:|---|
-| `ProtocolVersion` | `2` | Required control/binary protocol version |
+| `ProtocolVersion` | `3` | Required producer/observer control and binary protocol version |
 | `MaxBinaryFrameBytes` | `65560` | Maximum complete binary WebSocket message |
 | `MaxControlMessageBytes` | `4096` | Maximum complete JSON control message |
 | `ChunkDurationMs` | `150` | Required client PCM chunk duration |
@@ -126,6 +126,8 @@ dotnet user-secrets set "RealtimeAudio:AllowedOrigins:0" "chrome-extension://<UN
 ```
 
 Every connection still requires JWT, and native clients may omit `Origin`. Production deployments must supply their approved browser origins through deployment configuration; no developer extension ID belongs in tracked defaults.
+
+The same origin and secure-transport policy covers the read-only observer endpoint. The standalone Blazor WebAssembly client reads its non-secret API base URL from `APP/Web/TransLink.Lite.Web/wwwroot/appsettings.Development.json`; the tracked Development value is `http://localhost:5221`. The API permits the exact local Web origin `http://localhost:5268` through `WebClient:AllowedOrigins`. Deployment configuration must provide exact production origins; wildcard CORS is not used.
 
 For local Extension testing, obtain a short-lived token through the existing register/login endpoint and set it only in unpacked-extension local storage:
 

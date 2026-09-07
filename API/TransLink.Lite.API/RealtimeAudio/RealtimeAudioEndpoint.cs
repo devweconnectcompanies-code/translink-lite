@@ -6,6 +6,9 @@ public static class RealtimeAudioEndpoint
 {
     public const string Path = "/api/realtime/audio";
 
+    public static bool IsRealtimePath(PathString path) =>
+        path == Path || path == RealtimeSessionObserverEndpoint.ObserverPath;
+
     public static IEndpointRouteBuilder MapRealtimeAudio(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet(Path, async (

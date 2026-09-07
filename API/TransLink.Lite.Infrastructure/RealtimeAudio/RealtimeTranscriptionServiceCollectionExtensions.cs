@@ -40,6 +40,7 @@ public static class RealtimeTranscriptionServiceCollectionExtensions
                 RegionEndpoint = region,
             }));
         services.AddSingleton<IRealtimeTranslationProvider, AwsRealtimeTranslationProvider>();
+        services.AddSingleton<IRealtimeSessionRegistry, InMemoryRealtimeSessionRegistry>();
         services.AddSingleton<IRealtimeSpeechTranscriptionSessionFactory,
             AwsRealtimeSpeechTranscriptionSessionFactory>();
 

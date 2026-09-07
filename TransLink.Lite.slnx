@@ -1,4 +1,11 @@
 <Solution>
+  <Folder Name="/APP/" />
+  <Folder Name="/APP/Web/">
+    <Project Path="APP/Web/TransLink.Lite.Web/TransLink.Lite.Web.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/TransLink.Lite.WebTests/TransLink.Lite.WebTests.csproj" />
+  </Folder>
   <Project Path="API/TransLink.Lite.API/TransLink.Lite.API.csproj" />
   <Project Path="API/TransLink.Lite.Application/TransLink.Lite.Application.csproj" />
   <Project Path="API/TransLink.Lite.Domain/TransLink.Lite.Domain.csproj" />

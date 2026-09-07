@@ -1,0 +1,57 @@
+@page "/"
+@implements IAsyncDisposable
+@inject ActiveSessionClient SessionClient
+@inject RealtimeObserverClient ObserverClient
+
+<PageTitle>TransLink Lite</PageTitle>
+<header><span class="brand">TL</span><div><small>TransLink Lite</small><h1>Realtime Translation</h1></div><b>@_state.Status</b></header>
+<section class="controls">
+    <label>Temporary access token<input type="password" @bind="_accessToken" autocomplete="off" /></label>
+    <button @onclick="DiscoverAsync" disabled="@(_accessToken.Length == 0 || _state.Status == ObserverConnectionStatus.Discovering)">Find active sessions</button>
+    <label>
+        Active session
+        <select @bind="_selectedSessionId">
+            <option value="">Select a session</option>
+            @foreach (var session in _sessions)
+            {
+                <option value="@session.SessionId">@session.SourceLanguage → @session.TargetLanguage</option>
+            }
+        </select>
+    </label>
+    @if (_state.Status == ObserverConnectionStatus.Live)
+    {
+        <button @onclick="DisconnectAsync">Disconnect</button>
+    }
+    else
+    {
+        <button @onclick="ConnectAsync" disabled="@(_selectedSessionId.Length == 0)">Observe session</button>
+    }
+</section>
+<SubtitlePanel State="_state" SourceLanguage="@(_selected?.SourceLanguage ?? "—")" TargetLanguage="@(_selected?.TargetLanguage ?? "—")" />
+<p class="privacy">Subtitles and credentials remain in memory and are cleared on disconnect or session end.</p>
+
+@code {
+    private readonly RealtimeObserverState _state = new();
+    private IReadOnlyList<ActiveRealtimeSession> _sessions = [];
+    private string _accessToken = "";
+    private string _selectedSessionId = "";
+    private ActiveRealtimeSession? _selected => _sessions.FirstOrDefault(session => session.SessionId.ToString() == _selectedSessionId);
+
+    private async Task DiscoverAsync()
+    {
+        _state.SetStatus(ObserverConnectionStatus.Discovering);
+        try { _sessions = await SessionClient.GetActiveAsync(_accessToken, CancellationToken.None); _selectedSessionId = _sessions.FirstOrDefault()?.SessionId.ToString() ?? ""; _state.SetStatus(ObserverConnectionStatus.Disconnected); }
+        catch { _state.SetStatus(ObserverConnectionStatus.Error); }
+    }
+
+    private async Task ConnectAsync()
+    {
+        if (!Guid.TryParse(_selectedSessionId, out var sessionId)) return;
+        _state.Reset(ObserverConnectionStatus.Connecting);
+        try { await ObserverClient.ConnectAsync(sessionId, _accessToken, message => InvokeAsync(() => { _state.Apply(message); StateHasChanged(); }), CancellationToken.None); }
+        catch { _state.SetStatus(ObserverConnectionStatus.Error); }
+    }
+
+    private async Task DisconnectAsync() { await ObserverClient.DisconnectAsync(); _state.Reset(); }
+    public async ValueTask DisposeAsync() => await ObserverClient.DisposeAsync();
+}

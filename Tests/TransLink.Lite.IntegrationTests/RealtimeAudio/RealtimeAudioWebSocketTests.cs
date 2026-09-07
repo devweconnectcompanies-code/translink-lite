@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using System.Net.Http.Headers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TransLink.Lite.Application.RealtimeAudio;
@@ -266,6 +267,128 @@ public sealed class RealtimeAudioWebSocketTests
         await WaitUntilAsync(() => _fixture.Factory.RealtimeTranscription.Disposed == 1);
     }
 
+    [Fact]
+    public async Task Observer_SameOwner_ReceivesOrderedFinalEvents_AndProducerStopEndsSession()
+    {
+        await _fixture.ResetDatabaseAsync();
+        using var httpClient = _fixture.Factory.CreateClient();
+        var auth = await ApiTestClient.RegisterAsync(httpClient);
+        using var producer = await ConnectAuthenticatedAsync(auth.AccessToken);
+        await SendStartAsync(producer);
+        using var accepted = await ReceiveControlAsync(producer);
+        var sessionId = accepted.RootElement.GetProperty("sessionId").GetGuid();
+
+        using var activeRequest = new HttpRequestMessage(
+            HttpMethod.Get, "/api/realtime/sessions/active");
+        activeRequest.Headers.Authorization = new AuthenticationHeaderValue(
+            "Bearer", auth.AccessToken);
+        using var activeResponse = await httpClient.SendAsync(activeRequest);
+        Assert.Equal(System.Net.HttpStatusCode.OK, activeResponse.StatusCode);
+        var activeJson = await activeResponse.Content.ReadAsStringAsync();
+        Assert.Contains(sessionId.ToString(), activeJson, StringComparison.OrdinalIgnoreCase);
+
+        using var observer = await ConnectObserverAsync(auth.AccessToken, sessionId);
+        using var observerAccepted = await ReceiveControlAsync(observer);
+        Assert.Equal("observer.accepted", observerAccepted.RootElement.GetProperty("type").GetString());
+
+        await producer.SendAsync(CreateFrame(0, 0), WebSocketMessageType.Binary, true, default);
+        using var producerPartial = await ReceiveControlAsync(producer);
+        using var producerFinal = await ReceiveControlAsync(producer);
+        using var producerTranslation = await ReceiveControlAsync(producer);
+        using var observedTranscript = await ReceiveControlAsync(observer);
+        using var observedTranslation = await ReceiveControlAsync(observer);
+        Assert.Equal("transcript.final", observedTranscript.RootElement.GetProperty("type").GetString());
+        Assert.Equal("translation.final", observedTranslation.RootElement.GetProperty("type").GetString());
+        Assert.Equal(
+            observedTranscript.RootElement.GetProperty("eventSequence").GetInt64(),
+            observedTranslation.RootElement.GetProperty("eventSequence").GetInt64());
+
+        await producer.SendAsync(
+            Encoding.UTF8.GetBytes("""{"type":"session.stop","protocolVersion":3}"""),
+            WebSocketMessageType.Text, true, default);
+        using var producerStopped = await ReceiveControlAsync(producer);
+        var producerClose = await producer.ReceiveAsync(new byte[1], default);
+        Assert.Equal(WebSocketMessageType.Close, producerClose.MessageType);
+        await producer.CloseOutputAsync(
+            WebSocketCloseStatus.NormalClosure, "session-stopped", default);
+        using var observerClosed = await ReceiveControlAsync(observer);
+        Assert.Equal("session.closed", observerClosed.RootElement.GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public async Task Observer_ForeignOwner_GetsSameSafeRejectionAsUnknownSession()
+    {
+        await _fixture.ResetDatabaseAsync();
+        using var httpClient = _fixture.Factory.CreateClient();
+        var owner = await ApiTestClient.RegisterAsync(httpClient);
+        var foreign = await ApiTestClient.RegisterAsync(httpClient);
+        using var producer = await ConnectAuthenticatedAsync(owner.AccessToken);
+        await SendStartAsync(producer);
+        using var accepted = await ReceiveControlAsync(producer);
+        var sessionId = accepted.RootElement.GetProperty("sessionId").GetGuid();
+
+        using var observer = await ConnectObserverAsync(foreign.AccessToken, sessionId);
+        using var rejected = await ReceiveControlAsync(observer);
+        using var unknownObserver = await ConnectObserverAsync(foreign.AccessToken, Guid.NewGuid());
+        using var unknownRejected = await ReceiveControlAsync(unknownObserver);
+        Assert.Equal("observer.rejected", rejected.RootElement.GetProperty("type").GetString());
+        Assert.Equal("session-not-found", rejected.RootElement.GetProperty("code").GetString());
+        Assert.Equal(
+            rejected.RootElement.GetProperty("code").GetString(),
+            unknownRejected.RootElement.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task TwoObservers_ReceiveSameEvents_AndOneDisconnectIsIsolated()
+    {
+        await _fixture.ResetDatabaseAsync();
+        using var httpClient = _fixture.Factory.CreateClient();
+        var auth = await ApiTestClient.RegisterAsync(httpClient);
+        using var producer = await ConnectAuthenticatedAsync(auth.AccessToken);
+        await SendStartAsync(producer);
+        using var accepted = await ReceiveControlAsync(producer);
+        var sessionId = accepted.RootElement.GetProperty("sessionId").GetGuid();
+        using var observerA = await ConnectObserverAsync(auth.AccessToken, sessionId);
+        using var observerB = await ConnectObserverAsync(auth.AccessToken, sessionId);
+        using var acceptedA = await ReceiveControlAsync(observerA);
+        using var acceptedB = await ReceiveControlAsync(observerB);
+
+        await observerA.CloseAsync(
+            WebSocketCloseStatus.NormalClosure, "observer-disconnect", default);
+        await producer.SendAsync(CreateFrame(0, 0), WebSocketMessageType.Binary, true, default);
+        using var producerPartial = await ReceiveControlAsync(producer);
+        using var producerFinal = await ReceiveControlAsync(producer);
+        using var producerTranslation = await ReceiveControlAsync(producer);
+        using var observedTranscript = await ReceiveControlAsync(observerB);
+        using var observedTranslation = await ReceiveControlAsync(observerB);
+
+        Assert.Equal("transcript.final", observedTranscript.RootElement.GetProperty("type").GetString());
+        Assert.Equal("translation.final", observedTranslation.RootElement.GetProperty("type").GetString());
+        Assert.Equal(WebSocketState.Open, producer.State);
+        Assert.Equal(WebSocketState.Open, observerB.State);
+    }
+
+    [Fact]
+    public async Task Observer_SendingBinaryAudio_IsClosedWithoutStoppingProducer()
+    {
+        await _fixture.ResetDatabaseAsync();
+        using var httpClient = _fixture.Factory.CreateClient();
+        var auth = await ApiTestClient.RegisterAsync(httpClient);
+        using var producer = await ConnectAuthenticatedAsync(auth.AccessToken);
+        await SendStartAsync(producer);
+        using var accepted = await ReceiveControlAsync(producer);
+        var sessionId = accepted.RootElement.GetProperty("sessionId").GetGuid();
+        using var observer = await ConnectObserverAsync(auth.AccessToken, sessionId);
+        using var observerAccepted = await ReceiveControlAsync(observer);
+
+        await observer.SendAsync(new byte[] { 1 }, WebSocketMessageType.Binary, true, default);
+        var close = await observer.ReceiveAsync(new byte[1], default);
+
+        Assert.Equal(WebSocketMessageType.Close, close.MessageType);
+        Assert.Equal(WebSocketCloseStatus.PolicyViolation, observer.CloseStatus);
+        Assert.Equal(WebSocketState.Open, producer.State);
+    }
+
     private async Task<WebSocket> ConnectAuthenticatedAsync()
     {
         using var httpClient = _fixture.Factory.CreateClient();
@@ -277,6 +400,33 @@ public sealed class RealtimeAudioWebSocketTests
         return await webSocketClient.ConnectAsync(
             new Uri("ws://localhost/api/realtime/audio"),
             CancellationToken.None);
+    }
+
+    private async Task<WebSocket> ConnectAuthenticatedAsync(string accessToken)
+    {
+        var webSocketClient = _fixture.Factory.Server.CreateWebSocketClient();
+        webSocketClient.SubProtocols.Add(RealtimeAudioProtocol.WebSocketSubprotocol);
+        webSocketClient.SubProtocols.Add(
+            $"{RealtimeAudioProtocol.BearerSubprotocolPrefix}{accessToken}");
+        return await webSocketClient.ConnectAsync(
+            new Uri("ws://localhost/api/realtime/audio"), CancellationToken.None);
+    }
+
+    private async Task<WebSocket> ConnectObserverAsync(string accessToken, Guid sessionId)
+    {
+        var webSocketClient = _fixture.Factory.Server.CreateWebSocketClient();
+        webSocketClient.SubProtocols.Add(RealtimeAudioProtocol.WebSocketSubprotocol);
+        webSocketClient.SubProtocols.Add(
+            $"{RealtimeAudioProtocol.BearerSubprotocolPrefix}{accessToken}");
+        var socket = await webSocketClient.ConnectAsync(
+            new Uri("ws://localhost/api/realtime/sessions/observe"), CancellationToken.None);
+        await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            type = "observer.subscribe",
+            protocolVersion = 3,
+            sessionId,
+        }), WebSocketMessageType.Text, true, default);
+        return socket;
     }
 
     private static Task SendStartAsync(

@@ -58,6 +58,11 @@ if (!AwsTranscribeOptions.IsValid(awsTranscribeOptions))
         "AwsTranscribe configuration is missing or invalid.");
 }
 
+var webClientOrigins = builder.Configuration.GetSection("WebClient:AllowedOrigins")
+    .Get<string[]>() ?? [];
+if (!webClientOrigins.All(IsValidHttpOrigin))
+    throw new InvalidOperationException("WebClient:AllowedOrigins must contain exact HTTP(S) origins.");
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
 
@@ -113,7 +118,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnMessageReceived = context =>
             {
-                if (context.HttpContext.Request.Path == RealtimeAudioEndpoint.Path &&
+                if (RealtimeAudioEndpoint.IsRealtimePath(context.HttpContext.Request.Path) &&
                     context.HttpContext.WebSockets.IsWebSocketRequest)
                 {
                     var bearerProtocol = context.HttpContext.WebSockets
@@ -134,6 +139,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddCors(options => options.AddPolicy("WebClient", policy =>
+{
+    if (webClientOrigins.Length > 0)
+        policy.WithOrigins(webClientOrigins).AllowAnyHeader().AllowAnyMethod();
+}));
 
 builder.Services.AddProblemDetails(options =>
 {
@@ -246,11 +256,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseRateLimiter();
+app.UseCors("WebClient");
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 app.MapRealtimeAudio();
+app.MapRealtimeSessionObservers();
 
 app.MapHealthChecks("/health", CreateHealthCheckOptions("live"))
     .AllowAnonymous();
@@ -350,6 +362,15 @@ static bool IsValidAllowedOrigin(string value)
 {
     if (!Uri.TryCreate(value, UriKind.Absolute, out var origin)) return false;
     if (origin.Scheme is not ("http" or "https" or "chrome-extension")) return false;
+    return string.IsNullOrEmpty(origin.Query) &&
+        string.IsNullOrEmpty(origin.Fragment) &&
+        origin.AbsolutePath == "/";
+}
+
+static bool IsValidHttpOrigin(string value)
+{
+    if (!Uri.TryCreate(value, UriKind.Absolute, out var origin)) return false;
+    if (origin.Scheme is not ("http" or "https")) return false;
     return string.IsNullOrEmpty(origin.Query) &&
         string.IsNullOrEmpty(origin.Fragment) &&
         origin.AbsolutePath == "/";
