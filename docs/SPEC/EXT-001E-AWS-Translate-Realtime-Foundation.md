@@ -80,6 +80,14 @@ Unit tests cover language mapping, unsupported values, partial/empty skipping, s
 9. Stop and confirm transcription/translation cease, latest text clears, and the UI is reusable.
 10. Verify nothing sensitive or content-bearing was persisted, remove the JWT, and stop the API.
 
+### Validation result
+
+Manual end-to-end validation passed with real spoken-English audio from an HTTPS YouTube tab, source language `en-US`, target language `es`, and protocol `translink.realtime.v3`. The existing IAM Identity Center profile and standard AWS SDK credential chain were used; no long-lived AWS credential was introduced.
+
+AWS Transcribe Streaming produced continuous partial events and final transcripts. Partial events did not trigger translation, while final transcript events produced real Amazon Translate `TranslateText` calls and correlated `translation.final` events. The popup reached at least four final transcripts and four final translations, and rendered coherent Spanish text ephemerally under Latest Translation without recording the source or translated content here.
+
+Stop Capture ended capture, transcription, and translation cleanly, cleared the active translation and latest-translation UI state, and returned the extension to its reusable idle state. The milestone introduced no audio, transcript, or translation persistence.
+
 ## Acceptance, limitations, and rollback
 
 Acceptance requires the full real-browser, real-Transcribe, real-Translate flow, multiple finals, correct English-to-Spanish meaning, no partial translation, safe errors, clean Stop, and no audio/protocol/security regression. Automated tests alone do not establish real AWS success.
