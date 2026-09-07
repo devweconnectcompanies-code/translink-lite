@@ -389,6 +389,69 @@ public sealed class RealtimeAudioWebSocketTests
         Assert.Equal(WebSocketState.Open, producer.State);
     }
 
+    [Fact]
+    public async Task SpeechEnabledObserver_ReceivesCorrelatedBinaryAudio()
+    {
+        await _fixture.ResetDatabaseAsync();
+        using var httpClient = _fixture.Factory.CreateClient();
+        var auth = await ApiTestClient.RegisterAsync(httpClient);
+        using var producer = await ConnectAuthenticatedAsync(auth.AccessToken);
+        await SendStartAsync(producer);
+        using var accepted = await ReceiveControlAsync(producer);
+        var sessionId = accepted.RootElement.GetProperty("sessionId").GetGuid();
+        using var observer = await ConnectObserverAsync(auth.AccessToken, sessionId, speechEnabled: true);
+        using var observerAccepted = await ReceiveControlAsync(observer);
+
+        await producer.SendAsync(CreateFrame(0, 0), WebSocketMessageType.Binary, true, default);
+        using var producerPartial = await ReceiveControlAsync(producer);
+        using var producerFinal = await ReceiveControlAsync(producer);
+        using var producerTranslation = await ReceiveControlAsync(producer);
+        using var observedTranscript = await ReceiveControlAsync(observer);
+        using var observedTranslation = await ReceiveControlAsync(observer);
+        using var synthesizing = await ReceiveControlAsync(observer);
+        using var speech = await ReceiveControlAsync(observer);
+        var audioBuffer = new byte[32];
+        var audio = await observer.ReceiveAsync(audioBuffer, default);
+
+        Assert.Equal("speech.synthesizing", synthesizing.RootElement.GetProperty("type").GetString());
+        Assert.Equal("speech.segment", speech.RootElement.GetProperty("type").GetString());
+        Assert.Equal("test-final", speech.RootElement.GetProperty("sourceResultId").GetString());
+        Assert.Equal("mp3", speech.RootElement.GetProperty("audioFormat").GetString());
+        Assert.Equal(WebSocketMessageType.Binary, audio.MessageType);
+        Assert.Equal(4, audio.Count);
+        Assert.Equal(1, _fixture.Factory.RealtimeSpeech.Requests);
+        Assert.Equal(WebSocketState.Open, producer.State);
+    }
+
+    [Fact]
+    public async Task SpeechFailure_DoesNotStopTextOrProducer()
+    {
+        await _fixture.ResetDatabaseAsync();
+        _fixture.Factory.RealtimeSpeech.Fail = true;
+        using var httpClient = _fixture.Factory.CreateClient();
+        var auth = await ApiTestClient.RegisterAsync(httpClient);
+        using var producer = await ConnectAuthenticatedAsync(auth.AccessToken);
+        await SendStartAsync(producer);
+        using var accepted = await ReceiveControlAsync(producer);
+        var sessionId = accepted.RootElement.GetProperty("sessionId").GetGuid();
+        using var observer = await ConnectObserverAsync(auth.AccessToken, sessionId, speechEnabled: true);
+        using var observerAccepted = await ReceiveControlAsync(observer);
+
+        await producer.SendAsync(CreateFrame(0, 0), WebSocketMessageType.Binary, true, default);
+        using var producerPartial = await ReceiveControlAsync(producer);
+        using var producerFinal = await ReceiveControlAsync(producer);
+        using var producerTranslation = await ReceiveControlAsync(producer);
+        using var observedTranscript = await ReceiveControlAsync(observer);
+        using var observedTranslation = await ReceiveControlAsync(observer);
+        using var synthesizing = await ReceiveControlAsync(observer);
+        using var speechError = await ReceiveControlAsync(observer);
+
+        Assert.Equal("translation.final", observedTranslation.RootElement.GetProperty("type").GetString());
+        Assert.Equal("speech.error", speechError.RootElement.GetProperty("type").GetString());
+        Assert.Equal("speech-unavailable", speechError.RootElement.GetProperty("code").GetString());
+        Assert.Equal(WebSocketState.Open, producer.State);
+    }
+
     private async Task<WebSocket> ConnectAuthenticatedAsync()
     {
         using var httpClient = _fixture.Factory.CreateClient();
@@ -412,7 +475,7 @@ public sealed class RealtimeAudioWebSocketTests
             new Uri("ws://localhost/api/realtime/audio"), CancellationToken.None);
     }
 
-    private async Task<WebSocket> ConnectObserverAsync(string accessToken, Guid sessionId)
+    private async Task<WebSocket> ConnectObserverAsync(string accessToken, Guid sessionId, bool speechEnabled = false)
     {
         var webSocketClient = _fixture.Factory.Server.CreateWebSocketClient();
         webSocketClient.SubProtocols.Add(RealtimeAudioProtocol.WebSocketSubprotocol);
@@ -425,6 +488,7 @@ public sealed class RealtimeAudioWebSocketTests
             type = "observer.subscribe",
             protocolVersion = 3,
             sessionId,
+            speechEnabled,
         }), WebSocketMessageType.Text, true, default);
         return socket;
     }

@@ -9,6 +9,7 @@ public sealed class RealtimeObserverState
     public ObserverConnectionStatus Status { get; private set; } = ObserverConnectionStatus.Disconnected;
     public IReadOnlyList<SubtitleLine> Lines => _lines;
     public string? ErrorCode { get; private set; }
+    public SpeechPlaybackStatus SpeechStatus { get; private set; } = SpeechPlaybackStatus.Off;
 
     public void SetStatus(ObserverConnectionStatus status) => Status = status;
 
@@ -19,6 +20,9 @@ public sealed class RealtimeObserverState
             case "observer.accepted": Status = ObserverConnectionStatus.Live; break;
             case "observer.rejected": Status = ObserverConnectionStatus.Error; ErrorCode = message.Code; break;
             case "session.closed": Reset(ObserverConnectionStatus.Ended); break;
+            case "speech.synthesizing": SpeechStatus = SpeechPlaybackStatus.Synthesizing; break;
+            case "speech.state": SpeechStatus = message.Enabled == true ? SpeechPlaybackStatus.Ready : SpeechPlaybackStatus.Off; break;
+            case "speech.error": SpeechStatus = SpeechPlaybackStatus.Unavailable; ErrorCode = message.Code; break;
             case "translation.error": ErrorCode = message.Code; break;
             case "transcript.final" when message.EventSequence is { } sequence && message.Text is { } text:
                 AddOrUpdate(sequence, original: text, translation: null); break;
@@ -29,8 +33,10 @@ public sealed class RealtimeObserverState
 
     public void Reset(ObserverConnectionStatus status = ObserverConnectionStatus.Disconnected)
     {
-        _lines.Clear(); ErrorCode = null; Status = status;
+        _lines.Clear(); ErrorCode = null; Status = status; SpeechStatus = SpeechPlaybackStatus.Off;
     }
+
+    public void SetSpeechStatus(SpeechPlaybackStatus status) => SpeechStatus = status;
 
     private void AddOrUpdate(long sequence, string? original, string? translation)
     {

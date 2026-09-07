@@ -2,6 +2,7 @@
 @implements IAsyncDisposable
 @inject ActiveSessionClient SessionClient
 @inject RealtimeObserverClient ObserverClient
+@inject SpeechPlaybackQueue Playback
 
 <PageTitle>TransLink Lite</PageTitle>
 <header><span class="brand">TL</span><div><small>TransLink Lite</small><h1>Realtime Translation</h1></div><b>@_state.Status</b></header>
@@ -10,7 +11,7 @@
     <button @onclick="DiscoverAsync" disabled="@(_accessToken.Length == 0 || _state.Status == ObserverConnectionStatus.Discovering)">Find active sessions</button>
     <label>
         Active session
-        <select @bind="_selectedSessionId">
+        <select @bind="_selectedSessionId" @bind:after="SelectionChangedAsync">
             <option value="">Select a session</option>
             @foreach (var session in _sessions)
             {
@@ -26,8 +27,10 @@
     {
         <button @onclick="ConnectAsync" disabled="@(_selectedSessionId.Length == 0)">Observe session</button>
     }
+    <button @onclick="ToggleSpeechAsync" disabled="@(_state.Status != ObserverConnectionStatus.Live)">Translated audio: @(_speechEnabled ? "On" : "Off")</button>
 </section>
 <SubtitlePanel State="_state" SourceLanguage="@(_selected?.SourceLanguage ?? "—")" TargetLanguage="@(_selected?.TargetLanguage ?? "—")" />
+<p class="speech-status" aria-live="polite">Speech: @_state.SpeechStatus <span class="development-only">Queue: @Playback.QueueDepth</span></p>
 <p class="privacy">Subtitles and credentials remain in memory and are cleared on disconnect or session end.</p>
 
 @code {
@@ -35,7 +38,14 @@
     private IReadOnlyList<ActiveRealtimeSession> _sessions = [];
     private string _accessToken = "";
     private string _selectedSessionId = "";
+    private bool _speechEnabled;
     private ActiveRealtimeSession? _selected => _sessions.FirstOrDefault(session => session.SessionId.ToString() == _selectedSessionId);
+
+    protected override void OnInitialized() => Playback.OnStatusChanged = status => InvokeAsync(() =>
+    {
+        _state.SetSpeechStatus(status);
+        StateHasChanged();
+    });
 
     private async Task DiscoverAsync()
     {
@@ -48,10 +58,44 @@
     {
         if (!Guid.TryParse(_selectedSessionId, out var sessionId)) return;
         _state.Reset(ObserverConnectionStatus.Connecting);
-        try { await ObserverClient.ConnectAsync(sessionId, _accessToken, message => InvokeAsync(() => { _state.Apply(message); StateHasChanged(); }), CancellationToken.None); }
+        try
+        {
+            await ObserverClient.ConnectAsync(sessionId, _accessToken, _speechEnabled, OnObserverEventAsync, CancellationToken.None);
+            if (_speechEnabled) await Playback.EnableAsync();
+        }
         catch { _state.SetStatus(ObserverConnectionStatus.Error); }
     }
 
-    private async Task DisconnectAsync() { await ObserverClient.DisconnectAsync(); _state.Reset(); }
-    public async ValueTask DisposeAsync() => await ObserverClient.DisposeAsync();
+    private async Task OnObserverEventAsync(RealtimeObserverEvent message) => await InvokeAsync(async () =>
+    {
+        _state.Apply(message);
+        if (message.Type == "speech.segment")
+        {
+            Playback.Enqueue(message);
+            _state.SetSpeechStatus(SpeechPlaybackStatus.Playing);
+        }
+        if (message.Type == "session.closed") await Playback.ClearAsync();
+        StateHasChanged();
+    });
+
+    private async Task ToggleSpeechAsync()
+    {
+        _speechEnabled = !_speechEnabled;
+        if (_speechEnabled)
+        {
+            await Playback.EnableAsync();
+            _state.SetSpeechStatus(SpeechPlaybackStatus.Ready);
+            await ObserverClient.SetSpeechEnabledAsync(true, CancellationToken.None);
+        }
+        else
+        {
+            await ObserverClient.SetSpeechEnabledAsync(false, CancellationToken.None);
+            await Playback.ClearAsync();
+            _state.SetSpeechStatus(SpeechPlaybackStatus.Off);
+        }
+    }
+
+    private async Task SelectionChangedAsync() { await Playback.ClearAsync(); _speechEnabled = false; }
+    private async Task DisconnectAsync() { await ObserverClient.DisconnectAsync(); await Playback.ClearAsync(); _speechEnabled = false; _state.Reset(); }
+    public async ValueTask DisposeAsync() { await ObserverClient.DisposeAsync(); await Playback.DisposeAsync(); }
 }

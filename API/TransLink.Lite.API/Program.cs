@@ -57,6 +57,11 @@ if (!AwsTranscribeOptions.IsValid(awsTranscribeOptions))
     throw new InvalidOperationException(
         "AwsTranscribe configuration is missing or invalid.");
 }
+var awsPollyOptions = builder.Configuration
+    .GetSection(AwsPollyOptions.SectionName)
+    .Get<AwsPollyOptions>() ?? new AwsPollyOptions();
+if (!AwsPollyOptions.IsValid(awsPollyOptions))
+    throw new InvalidOperationException("AwsPolly configuration is missing or invalid.");
 
 var webClientOrigins = builder.Configuration.GetSection("WebClient:AllowedOrigins")
     .Get<string[]>() ?? [];
@@ -97,7 +102,7 @@ builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 builder.Services.AddScoped<ITranslationSessionService, TranslationSessionService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ITranslationSessionRepository, TranslationSessionRepository>();
-builder.Services.AddAwsRealtimeTranscription(awsTranscribeOptions);
+builder.Services.AddAwsRealtimeTranscription(awsTranscribeOptions, awsPollyOptions);
 builder.Services.AddSingleton<RealtimeTranslationOrchestrator>();
 builder.Services.AddScoped<RealtimeAudioConnectionHandler>();
 

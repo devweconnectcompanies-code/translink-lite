@@ -14,6 +14,7 @@ public sealed class RealtimeAudioConnectionHandler
     private readonly IRealtimeSpeechTranscriptionSessionFactory _sessionFactory;
     private readonly RealtimeTranslationOrchestrator _translationOrchestrator;
     private readonly IRealtimeSessionRegistry _sessionRegistry;
+    private readonly IRealtimeSpeechSynthesisCoordinator _speechCoordinator;
     private readonly ILogger<RealtimeAudioConnectionHandler> _logger;
     private readonly IWebHostEnvironment _environment;
 
@@ -22,6 +23,7 @@ public sealed class RealtimeAudioConnectionHandler
         IRealtimeSpeechTranscriptionSessionFactory sessionFactory,
         RealtimeTranslationOrchestrator translationOrchestrator,
         IRealtimeSessionRegistry sessionRegistry,
+        IRealtimeSpeechSynthesisCoordinator speechCoordinator,
         ILogger<RealtimeAudioConnectionHandler> logger,
         IWebHostEnvironment environment)
     {
@@ -29,6 +31,7 @@ public sealed class RealtimeAudioConnectionHandler
         _sessionFactory = sessionFactory;
         _translationOrchestrator = translationOrchestrator;
         _sessionRegistry = sessionRegistry;
+        _speechCoordinator = speechCoordinator;
         _logger = logger;
         _environment = environment;
     }
@@ -178,6 +181,7 @@ public sealed class RealtimeAudioConnectionHandler
                 return;
             }
             producerRegistered = true;
+            _speechCoordinator.RegisterSession(sessionId, targetLanguage!);
 
             await SendControlAsync(socket, sendLock, new
             {
@@ -381,7 +385,11 @@ public sealed class RealtimeAudioConnectionHandler
                 await session.DisposeAsync();
             }
 
-            if (producerRegistered) _sessionRegistry.Complete(sessionId);
+            if (producerRegistered)
+            {
+                await _speechCoordinator.CompleteAsync(sessionId);
+                _sessionRegistry.Complete(sessionId);
+            }
 
             ArrayPool<byte>.Shared.Return(rentedBuffer, clearArray: false);
         }
@@ -446,7 +454,7 @@ public sealed class RealtimeAudioConnectionHandler
                 translated.SourceLanguage,
                 translated.TargetLanguage,
                 outcome.DurationMilliseconds), cancellationToken);
-            _sessionRegistry.Publish(transcript.SessionId, new RealtimeSessionEvent(
+            var translationEvent = new RealtimeSessionEvent(
                 "translation.final",
                 _options.ProtocolVersion,
                 transcript.SessionId,
@@ -454,7 +462,9 @@ public sealed class RealtimeAudioConnectionHandler
                 transcript.ResultId,
                 translated.Text,
                 translated.SourceLanguage,
-                translated.TargetLanguage));
+                translated.TargetLanguage);
+            _sessionRegistry.Publish(transcript.SessionId, translationEvent);
+            _speechCoordinator.EnqueueTranslation(transcript.SessionId, translationEvent);
             _logger.LogInformation(
                 "Realtime translation completed. SessionId: {SessionId}, SourceLanguage: {SourceLanguage}, TargetLanguage: {TargetLanguage}, DurationMs: {DurationMs}",
                 transcript.SessionId,

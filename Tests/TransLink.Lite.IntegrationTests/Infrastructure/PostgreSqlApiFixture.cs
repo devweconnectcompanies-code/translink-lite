@@ -38,6 +38,7 @@ public sealed class PostgreSqlApiFixture : IAsyncLifetime
     {
         Factory.RealtimeTranscription.Reset();
         Factory.RealtimeTranslation.Reset();
+        Factory.RealtimeSpeech.Reset();
         await using var scope = Factory.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await dbContext.Database.ExecuteSqlRawAsync(

@@ -64,7 +64,7 @@ public static class RealtimeSessionObserverEndpoint
         var received = await socket.ReceiveAsync(buffer, context.RequestAborted);
         if (received.MessageType != WebSocketMessageType.Text ||
             !received.EndOfMessage || received.Count > options.MaxControlMessageBytes ||
-            !TryParseSubscription(buffer.AsSpan(0, received.Count), out var sessionId))
+            !TryParseSubscription(buffer.AsSpan(0, received.Count), out var sessionId, out var speechEnabled))
         {
             await RejectAsync(socket, "invalid-observer-handshake", context.RequestAborted);
             return;
@@ -78,6 +78,11 @@ public static class RealtimeSessionObserverEndpoint
             return;
         }
 
+        var speechCoordinator = context.RequestServices
+            .GetRequiredService<IRealtimeSpeechSynthesisCoordinator>();
+        var initialSpeechLease = speechEnabled
+            ? speechCoordinator.AcquireConsumer(sessionId)
+            : null;
         await SendAsync(socket, new
         {
             type = "observer.accepted",
@@ -87,12 +92,15 @@ public static class RealtimeSessionObserverEndpoint
 
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
         var pump = PumpEventsAsync(socket, subscription, lifetime.Token);
-        var monitor = MonitorClientAsync(socket, lifetime.Token);
+        var monitor = MonitorClientAsync(
+            socket, sessionId, initialSpeechLease, speechCoordinator,
+            options.MaxControlMessageBytes, lifetime.Token);
         await Task.WhenAny(pump, monitor);
         await lifetime.CancelAsync();
         try { await Task.WhenAll(pump, monitor); }
         catch (OperationCanceledException) { }
         catch (WebSocketException) { }
+        catch (IOException) { }
         catch (ChannelClosedException)
         {
             if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
@@ -109,19 +117,27 @@ public static class RealtimeSessionObserverEndpoint
         }
     }
 
-    private static bool TryParseSubscription(ReadOnlySpan<byte> json, out Guid sessionId)
+    private static bool TryParseSubscription(
+        ReadOnlySpan<byte> json,
+        out Guid sessionId,
+        out bool speechEnabled)
     {
         sessionId = default;
+        speechEnabled = false;
         try
         {
             using var document = JsonDocument.Parse(json.ToArray());
             var root = document.RootElement;
-            return root.TryGetProperty("type", out var type) &&
+            var valid = root.TryGetProperty("type", out var type) &&
                 type.GetString() == "observer.subscribe" &&
                 root.TryGetProperty("protocolVersion", out var version) &&
                 version.GetInt32() == RealtimeAudioProtocol.CurrentVersion &&
                 root.TryGetProperty("sessionId", out var id) &&
                 Guid.TryParse(id.GetString(), out sessionId);
+            if (valid && root.TryGetProperty("speechEnabled", out var speech) &&
+                speech.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                speechEnabled = speech.GetBoolean();
+            return valid;
         }
         catch (JsonException)
         {
@@ -137,6 +153,8 @@ public static class RealtimeSessionObserverEndpoint
         await foreach (var message in subscription.Events.ReadAllAsync(cancellationToken))
         {
             await SendAsync(socket, message, cancellationToken);
+            if (message.Type == "speech.segment" && message.AudioPayload is { Length: > 0 } audio)
+                await socket.SendAsync(audio, WebSocketMessageType.Binary, true, cancellationToken);
             if (message.Type == "session.closed")
             {
                 await socket.CloseAsync(
@@ -150,22 +168,77 @@ public static class RealtimeSessionObserverEndpoint
 
     private static async Task MonitorClientAsync(
         WebSocket socket,
+        Guid sessionId,
+        IRealtimeSpeechConsumerLease? initialSpeechLease,
+        IRealtimeSpeechSynthesisCoordinator speechCoordinator,
+        int maximumControlBytes,
         CancellationToken cancellationToken)
     {
-        var buffer = new byte[1];
-        var result = await socket.ReceiveAsync(buffer, cancellationToken);
-        if (result.MessageType == WebSocketMessageType.Close)
+        IRealtimeSpeechConsumerLease? speechLease = initialSpeechLease;
+        var buffer = new byte[maximumControlBytes + 1];
+        try
         {
-            await socket.CloseOutputAsync(
-                WebSocketCloseStatus.NormalClosure,
-                "observer-disconnect",
-                cancellationToken);
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var result = await socket.ReceiveAsync(buffer, cancellationToken);
+                if (result.MessageType == WebSocketMessageType.Close)
+                {
+                    await socket.CloseOutputAsync(
+                        WebSocketCloseStatus.NormalClosure,
+                        "observer-disconnect",
+                        cancellationToken);
+                    return;
+                }
+                if (result.MessageType != WebSocketMessageType.Text ||
+                    !result.EndOfMessage || result.Count > maximumControlBytes ||
+                    !TryParseSpeechControl(buffer.AsSpan(0, result.Count), out var enabled))
+                {
+                    await socket.CloseAsync(
+                        WebSocketCloseStatus.PolicyViolation,
+                        "observer-read-only",
+                        cancellationToken);
+                    return;
+                }
+                if (enabled && speechLease is null)
+                    speechLease = speechCoordinator.AcquireConsumer(sessionId);
+                else if (!enabled && speechLease is not null)
+                {
+                    await speechLease.DisposeAsync();
+                    speechLease = null;
+                }
+                await SendAsync(socket, new
+                {
+                    type = "speech.state",
+                    protocolVersion = RealtimeAudioProtocol.CurrentVersion,
+                    sessionId,
+                    enabled = speechLease is not null,
+                }, cancellationToken);
+            }
         }
-        else
-            await socket.CloseAsync(
-                WebSocketCloseStatus.PolicyViolation,
-                "observer-read-only",
-                cancellationToken);
+        finally
+        {
+            if (speechLease is not null) await speechLease.DisposeAsync();
+        }
+    }
+
+    private static bool TryParseSpeechControl(ReadOnlySpan<byte> json, out bool enabled)
+    {
+        enabled = false;
+        try
+        {
+            using var document = JsonDocument.Parse(json.ToArray());
+            var root = document.RootElement;
+            if (!root.TryGetProperty("type", out var type) ||
+                type.GetString() != "observer.speech" ||
+                !root.TryGetProperty("protocolVersion", out var version) ||
+                version.GetInt32() != RealtimeAudioProtocol.CurrentVersion ||
+                !root.TryGetProperty("enabled", out var value) ||
+                value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                return false;
+            enabled = value.GetBoolean();
+            return true;
+        }
+        catch (JsonException) { return false; }
     }
 
     private static Task RejectAsync(

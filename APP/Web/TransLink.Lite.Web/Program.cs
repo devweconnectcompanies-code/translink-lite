@@ -10,4 +10,5 @@ var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? builder.HostEnvironment.
 builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(apiBaseUrl) });
 builder.Services.AddScoped<ActiveSessionClient>();
 builder.Services.AddScoped<RealtimeObserverClient>();
+builder.Services.AddScoped<SpeechPlaybackQueue>();
 await builder.Build().RunAsync();

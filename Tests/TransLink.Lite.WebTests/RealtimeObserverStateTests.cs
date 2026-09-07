@@ -56,6 +56,18 @@ public sealed class RealtimeObserverStateTests
         Assert.Equal("translation-connection", state.ErrorCode);
     }
 
+    [Fact]
+    public void SpeechLifecycle_UsesSanitizedBoundedClientState()
+    {
+        var state = new RealtimeObserverState();
+        state.Apply(Event("speech.synthesizing"));
+        Assert.Equal(SpeechPlaybackStatus.Synthesizing, state.SpeechStatus);
+        state.Apply(Event("speech.error", code: "speech-unavailable"));
+        Assert.Equal(SpeechPlaybackStatus.Unavailable, state.SpeechStatus);
+        state.Reset();
+        Assert.Equal(SpeechPlaybackStatus.Off, state.SpeechStatus);
+    }
+
     private static RealtimeObserverEvent Event(string type, long? sequence = null, string? text = null, string? code = null) =>
         new(type, 3, Guid.NewGuid(), sequence, "result", text, "en", "es", code);
 }

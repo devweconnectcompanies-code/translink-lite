@@ -12,7 +12,7 @@ public sealed class RealtimeObserverClient(HttpClient httpClient) : IAsyncDispos
     private CancellationTokenSource? _lifetime;
     private Task? _receiveTask;
 
-    public async Task ConnectAsync(Guid sessionId, string accessToken, Func<RealtimeObserverEvent, Task> onEvent, CancellationToken cancellationToken)
+    public async Task ConnectAsync(Guid sessionId, string accessToken, bool speechEnabled, Func<RealtimeObserverEvent, Task> onEvent, CancellationToken cancellationToken)
     {
         await DisconnectAsync();
         _lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -22,9 +22,12 @@ public sealed class RealtimeObserverClient(HttpClient httpClient) : IAsyncDispos
         var api = httpClient.BaseAddress ?? throw new InvalidOperationException("API base URL is unavailable.");
         var uri = new UriBuilder(api) { Scheme = api.Scheme == "https" ? "wss" : "ws", Path = "/api/realtime/sessions/observe", Query = "" }.Uri;
         await _socket.ConnectAsync(uri, _lifetime.Token);
-        await SendAsync(new { type = "observer.subscribe", protocolVersion = ProtocolVersion, sessionId }, _lifetime.Token);
+        await SendAsync(new { type = "observer.subscribe", protocolVersion = ProtocolVersion, sessionId, speechEnabled }, _lifetime.Token);
         _receiveTask = ReceiveAsync(onEvent, _lifetime.Token);
     }
+
+    public Task SetSpeechEnabledAsync(bool enabled, CancellationToken cancellationToken) =>
+        SendAsync(new { type = "observer.speech", protocolVersion = ProtocolVersion, enabled }, cancellationToken);
 
     public async Task DisconnectAsync()
     {
@@ -44,16 +47,37 @@ public sealed class RealtimeObserverClient(HttpClient httpClient) : IAsyncDispos
 
     private async Task ReceiveAsync(Func<RealtimeObserverEvent, Task> onEvent, CancellationToken cancellationToken)
     {
-        var buffer = new byte[16_384];
+        var buffer = new byte[64_000];
+        RealtimeObserverEvent? pendingSpeech = null;
         try
         {
             while (_socket?.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
             {
-                var result = await _socket.ReceiveAsync(buffer, cancellationToken);
+                using var messageBuffer = new MemoryStream();
+                WebSocketReceiveResult result;
+                do
+                {
+                    result = await _socket.ReceiveAsync(buffer, cancellationToken);
+                    if (result.Count > 0) messageBuffer.Write(buffer, 0, result.Count);
+                    if (messageBuffer.Length > 1_048_576)
+                        throw new WebSocketException("observer-message-limit");
+                } while (!result.EndOfMessage);
                 if (result.MessageType == WebSocketMessageType.Close) break;
-                if (result.MessageType != WebSocketMessageType.Text || !result.EndOfMessage) continue;
-                var message = JsonSerializer.Deserialize<RealtimeObserverEvent>(buffer.AsSpan(0, result.Count), JsonSerializerOptions.Web);
-                if (message is not null && message.ProtocolVersion == ProtocolVersion) await onEvent(message);
+                if (result.MessageType == WebSocketMessageType.Binary)
+                {
+                    if (pendingSpeech is not null && pendingSpeech.AudioByteLength == messageBuffer.Length)
+                    {
+                        await onEvent(pendingSpeech with { AudioPayload = messageBuffer.ToArray() });
+                        pendingSpeech = null;
+                    }
+                    continue;
+                }
+                if (result.MessageType != WebSocketMessageType.Text) continue;
+                var message = JsonSerializer.Deserialize<RealtimeObserverEvent>(
+                    messageBuffer.ToArray(), JsonSerializerOptions.Web);
+                if (message is null || message.ProtocolVersion != ProtocolVersion) continue;
+                if (message.Type == "speech.segment") pendingSpeech = message;
+                else await onEvent(message);
             }
         }
         catch (OperationCanceledException) { }

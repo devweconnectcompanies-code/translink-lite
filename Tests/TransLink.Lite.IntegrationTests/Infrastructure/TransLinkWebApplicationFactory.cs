@@ -18,6 +18,7 @@ public sealed class TransLinkWebApplicationFactory : WebApplicationFactory<Progr
     private readonly string? _realtimeAllowedOrigin;
     public FakeRealtimeSpeechTranscriptionSessionFactory RealtimeTranscription { get; } = new();
     public FakeRealtimeTranslationProvider RealtimeTranslation { get; } = new();
+    public FakeRealtimeSpeechSynthesisProvider RealtimeSpeech { get; } = new();
 
     public TransLinkWebApplicationFactory(
         string connectionString,
@@ -75,6 +76,8 @@ public sealed class TransLinkWebApplicationFactory : WebApplicationFactory<Progr
             services.AddSingleton<IRealtimeSpeechTranscriptionSessionFactory>(RealtimeTranscription);
             services.RemoveAll<IRealtimeTranslationProvider>();
             services.AddSingleton<IRealtimeTranslationProvider>(RealtimeTranslation);
+            services.RemoveAll<IRealtimeSpeechSynthesisProvider>();
+            services.AddSingleton<IRealtimeSpeechSynthesisProvider>(RealtimeSpeech);
         });
     }
 }

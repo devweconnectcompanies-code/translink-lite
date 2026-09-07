@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using System.Text.Json.Serialization;
 
 namespace TransLink.Lite.Application.RealtimeAudio;
 
@@ -17,7 +18,13 @@ public sealed record RealtimeSessionEvent(
     string? Text = null,
     string? SourceLanguage = null,
     string? TargetLanguage = null,
-    string? Code = null);
+    string? Code = null,
+    long? SpeechSequence = null,
+    string? AudioFormat = null,
+    string? ContentType = null,
+    int? AudioByteLength = null,
+    long? SynthesisDurationMilliseconds = null,
+    [property: JsonIgnore] byte[]? AudioPayload = null);
 
 public interface IRealtimeSessionSubscription : IAsyncDisposable
 {

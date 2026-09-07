@@ -154,6 +154,12 @@ Credentials are resolved only through the standard AWS SDK credential provider c
 
 Amazon Translate reuses `AwsTranscribe:Region` for realtime translation and the same credential chain. Local validation additionally requires `translate:TranslateText`; readiness never makes a paid provider call. The AWS profile remains a process-level concern.
 
+## AWS Polly realtime speech
+
+Amazon Polly also reuses `AwsTranscribe:Region` and the standard AWS credential chain. `AwsPolly` contains only bounded operational settings: `WorkQueueCapacity`, `ProviderTimeoutSeconds`, `MaximumTextCharacters`, and `MaximumAudioBytes`. The initial explicit `es` voice mapping is documented in `SPEC/EXT-001G-AWS-Polly-Realtime-TTS-Foundation.md`.
+
+Local manual validation requires the narrow IAM action `polly:SynthesizeSpeech`. TTS is demand-driven and defaults off, so starting the API or observing text does not itself make a paid Polly request. No provider credential or synthesized audio belongs in configuration, logs, files, or browser storage.
+
 For local IAM Identity Center testing after `aws sso login --profile translink-dev`, scope the developer profile and region to the API process:
 
 ```bash

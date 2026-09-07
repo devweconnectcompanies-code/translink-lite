@@ -42,6 +42,8 @@ API ──────────────┬──> Application ──> Dom
 
 Domain has no dependency on ASP.NET Core, EF Core, Infrastructure, or API. Controllers do not access `AppDbContext`; they call application-service interfaces. Repository interfaces are defined in Application and implemented in Infrastructure.
 
+Realtime speech synthesis follows the same boundary: Application owns provider-neutral contracts, demand-aware bounded orchestration, voice selection, and safe metrics; Infrastructure owns the AWS Polly SDK adapter; API owns authenticated binary delivery; and the standalone Blazor WebAssembly client owns bounded browser playback. Synthesized speech remains ephemeral and is never persisted.
+
 ## Domain model
 
 `User` persists `Id`, profile names, `Email`, `NormalizedEmail`, `PasswordHash`, `PreferredLanguage`, `CreatedAt`, and its owned sessions. `NormalizedEmail`, rather than display `Email`, is used for identity lookup and uniqueness.
