@@ -10,7 +10,7 @@ public sealed class RealtimeAudioProtocolTests
     public void ParseControl_WithValidStart_ReturnsMessage()
     {
         var payload = Encoding.UTF8.GetBytes(
-            """{"type":"session.start","protocolVersion":2,"audio":{"encoding":"pcm_s16le","sampleRateHz":48000,"channelCount":1,"chunkDurationMs":150,"sourceLanguage":"en-US"}}""");
+            """{"type":"session.start","protocolVersion":3,"targetLanguage":"es","audio":{"encoding":"pcm_s16le","sampleRateHz":48000,"channelCount":1,"chunkDurationMs":150,"sourceLanguage":"en-US"}}""");
 
         var result = RealtimeAudioProtocol.ParseControl(payload);
 
@@ -33,9 +33,19 @@ public sealed class RealtimeAudioProtocolTests
     {
         var message = CreateStart(protocolVersion: 1);
 
-        var error = RealtimeAudioProtocol.ValidateSessionStart(message, 2, 150);
+        var error = RealtimeAudioProtocol.ValidateSessionStart(message, 3, 150);
 
         Assert.Equal("unsupported-protocol-version", error);
+    }
+
+    [Fact]
+    public void ValidateSessionStart_WithUnsupportedTargetLanguage_ReturnsError()
+    {
+        var message = CreateStart() with { TargetLanguage = "unsupported" };
+
+        var error = RealtimeAudioProtocol.ValidateSessionStart(message, 3, 150);
+
+        Assert.Equal("unsupported-translation-language", error);
     }
 
     [Theory]
@@ -55,7 +65,7 @@ public sealed class RealtimeAudioProtocolTests
             channelCount: channelCount,
             chunkDurationMs: chunkDurationMs);
 
-        var error = RealtimeAudioProtocol.ValidateSessionStart(message, 2, 150);
+        var error = RealtimeAudioProtocol.ValidateSessionStart(message, 3, 150);
 
         Assert.Equal("unsupported-audio-format", error);
     }
@@ -105,19 +115,19 @@ public sealed class RealtimeAudioProtocolTests
     [Fact]
     public void ValidateLimits_WithSupportedConfiguration_ReturnsNoError()
     {
-        var limits = new RealtimeAudioLimits(2, 65_560, 4_096, 150, 10, 15, 1);
+        var limits = new RealtimeAudioLimits(3, 65_560, 4_096, 150, 10, 15, 1);
 
         Assert.Null(RealtimeAudioProtocol.ValidateLimits(limits));
     }
 
     [Theory]
     [InlineData(1, 65_560, 4_096, 150, 10, 15, 1, "protocol-version")]
-    [InlineData(2, 100, 4_096, 150, 10, 15, 1, "binary-frame-limit")]
-    [InlineData(2, 65_560, 100, 150, 10, 15, 1, "control-message-limit")]
-    [InlineData(2, 65_560, 4_096, 250, 10, 15, 1, "chunk-duration")]
-    [InlineData(2, 65_560, 4_096, 150, 0, 15, 1, "handshake-timeout")]
-    [InlineData(2, 65_560, 4_096, 150, 10, 0, 1, "idle-timeout")]
-    [InlineData(2, 65_560, 4_096, 150, 10, 15, 0, "protocol-violations")]
+    [InlineData(3, 100, 4_096, 150, 10, 15, 1, "binary-frame-limit")]
+    [InlineData(3, 65_560, 100, 150, 10, 15, 1, "control-message-limit")]
+    [InlineData(3, 65_560, 4_096, 250, 10, 15, 1, "chunk-duration")]
+    [InlineData(3, 65_560, 4_096, 150, 0, 15, 1, "handshake-timeout")]
+    [InlineData(3, 65_560, 4_096, 150, 10, 0, 1, "idle-timeout")]
+    [InlineData(3, 65_560, 4_096, 150, 10, 15, 0, "protocol-violations")]
     public void ValidateLimits_WithInvalidConfiguration_ReturnsSpecificError(
         int protocolVersion,
         int maxBinaryFrameBytes,
@@ -141,7 +151,7 @@ public sealed class RealtimeAudioProtocolTests
     }
 
     private static RealtimeControlMessage CreateStart(
-        int protocolVersion = 2,
+        int protocolVersion = 3,
         string encoding = "pcm_s16le",
         int sampleRateHz = 48_000,
         int channelCount = 1,
@@ -154,7 +164,8 @@ public sealed class RealtimeAudioProtocolTests
                 sampleRateHz,
                 channelCount,
                 chunkDurationMs,
-                "en-US"));
+                "en-US"),
+            "es");
 
     private static byte[] CreateFrame(
         ulong sequence,

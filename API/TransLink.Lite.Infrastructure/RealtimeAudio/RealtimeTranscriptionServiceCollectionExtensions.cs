@@ -1,5 +1,6 @@
 using Amazon;
 using Amazon.TranscribeStreaming;
+using Amazon.Translate;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using TransLink.Lite.Application.RealtimeAudio;
@@ -33,6 +34,12 @@ public static class RealtimeTranscriptionServiceCollectionExtensions
                 {
                     RegionEndpoint = region,
                 }));
+        services.AddSingleton<IAmazonTranslate>(_ =>
+            new AmazonTranslateClient(new AmazonTranslateConfig
+            {
+                RegionEndpoint = region,
+            }));
+        services.AddSingleton<IRealtimeTranslationProvider, AwsRealtimeTranslationProvider>();
         services.AddSingleton<IRealtimeSpeechTranscriptionSessionFactory,
             AwsRealtimeSpeechTranscriptionSessionFactory>();
 

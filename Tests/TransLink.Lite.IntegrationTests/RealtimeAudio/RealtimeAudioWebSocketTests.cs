@@ -43,19 +43,23 @@ public sealed class RealtimeAudioWebSocketTests
 
         using var accepted = await ReceiveControlAsync(socket);
         Assert.Equal("session.accepted", accepted.RootElement.GetProperty("type").GetString());
-        Assert.Equal(2, accepted.RootElement.GetProperty("protocolVersion").GetInt32());
+        Assert.Equal(3, accepted.RootElement.GetProperty("protocolVersion").GetInt32());
         Assert.Equal("en-US", accepted.RootElement.GetProperty("sourceLanguage").GetString());
 
         await socket.SendAsync(CreateFrame(0, 0), WebSocketMessageType.Binary, true, default);
         using var partial = await ReceiveControlAsync(socket);
         using var final = await ReceiveControlAsync(socket);
+        using var translation = await ReceiveControlAsync(socket);
         Assert.Equal("transcript.partial", partial.RootElement.GetProperty("type").GetString());
         Assert.False(partial.RootElement.GetProperty("isFinal").GetBoolean());
         Assert.Equal("transcript.final", final.RootElement.GetProperty("type").GetString());
         Assert.True(final.RootElement.GetProperty("isFinal").GetBoolean());
+        Assert.Equal("translation.final", translation.RootElement.GetProperty("type").GetString());
+        Assert.Equal("test-final", translation.RootElement.GetProperty("sourceResultId").GetString());
+        Assert.Equal("es", translation.RootElement.GetProperty("targetLanguage").GetString());
         await socket.SendAsync(CreateFrame(1, 150), WebSocketMessageType.Binary, true, default);
         await socket.SendAsync(
-            Encoding.UTF8.GetBytes("""{"type":"session.stop","protocolVersion":2}"""),
+            Encoding.UTF8.GetBytes("""{"type":"session.stop","protocolVersion":3}"""),
             WebSocketMessageType.Text,
             true,
             default);
@@ -86,6 +90,44 @@ public sealed class RealtimeAudioWebSocketTests
         Assert.Equal("session.rejected", rejected.RootElement.GetProperty("type").GetString());
         Assert.Equal("unsupported-audio-format", rejected.RootElement.GetProperty("code").GetString());
         Assert.Equal(0, _fixture.Factory.RealtimeTranscription.Created);
+    }
+
+    [Fact]
+    public async Task Start_WithUnsupportedTargetLanguage_IsRejectedBeforeProvidersStart()
+    {
+        await _fixture.ResetDatabaseAsync();
+        using var socket = await ConnectAuthenticatedAsync();
+        await SendStartAsync(socket, targetLanguage: "unsupported");
+
+        using var rejected = await ReceiveControlAsync(socket);
+        Assert.Equal("session.rejected", rejected.RootElement.GetProperty("type").GetString());
+        Assert.Equal(
+            "unsupported-translation-language",
+            rejected.RootElement.GetProperty("code").GetString());
+        Assert.Equal(0, _fixture.Factory.RealtimeTranscription.Created);
+        Assert.Equal(0, _fixture.Factory.RealtimeTranslation.Requests);
+    }
+
+    [Fact]
+    public async Task TranslationFailure_ReturnsSafeError_WithoutClosingTranscription()
+    {
+        await _fixture.ResetDatabaseAsync();
+        _fixture.Factory.RealtimeTranslation.Fail = true;
+        using var socket = await ConnectAuthenticatedAsync();
+        await SendStartAsync(socket);
+        using var accepted = await ReceiveControlAsync(socket);
+
+        await socket.SendAsync(CreateFrame(0, 0), WebSocketMessageType.Binary, true, default);
+        using var partial = await ReceiveControlAsync(socket);
+        using var final = await ReceiveControlAsync(socket);
+        using var error = await ReceiveControlAsync(socket);
+
+        Assert.Equal("transcript.partial", partial.RootElement.GetProperty("type").GetString());
+        Assert.Equal("transcript.final", final.RootElement.GetProperty("type").GetString());
+        Assert.Equal("translation.error", error.RootElement.GetProperty("type").GetString());
+        Assert.Equal("translation-connection", error.RootElement.GetProperty("code").GetString());
+        Assert.Equal(WebSocketState.Open, socket.State);
+        Assert.Equal(1, _fixture.Factory.RealtimeTranslation.Requests);
     }
 
     [Fact]
@@ -237,12 +279,16 @@ public sealed class RealtimeAudioWebSocketTests
             CancellationToken.None);
     }
 
-    private static Task SendStartAsync(WebSocket socket, string sourceLanguage = "en-US") =>
+    private static Task SendStartAsync(
+        WebSocket socket,
+        string sourceLanguage = "en-US",
+        string targetLanguage = "es") =>
         socket.SendAsync(
             JsonSerializer.SerializeToUtf8Bytes(new
             {
                 type = "session.start",
-                protocolVersion = 2,
+                protocolVersion = 3,
+                targetLanguage,
                 audio = new
                 {
                     encoding = "pcm_s16le",

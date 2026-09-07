@@ -22,6 +22,10 @@ export interface TransportSnapshot {
   transcriptionActive: boolean;
   partialTranscriptsReceived: number;
   finalTranscriptsReceived: number;
+  translationActive: boolean;
+  finalTranslationsReceived: number;
+  latestTranslation: string | null;
+  translationErrorCode: string | null;
   errorCode: TransportErrorCode | null;
 }
 
@@ -32,5 +36,9 @@ export const DISCONNECTED_TRANSPORT_STATE: TransportSnapshot = {
   transcriptionActive: false,
   partialTranscriptsReceived: 0,
   finalTranscriptsReceived: 0,
+  translationActive: false,
+  finalTranslationsReceived: 0,
+  latestTranslation: null,
+  translationErrorCode: null,
   errorCode: null,
 };

@@ -17,6 +17,7 @@ public sealed class TransLinkWebApplicationFactory : WebApplicationFactory<Progr
     private readonly int _authenticationPermitLimit;
     private readonly string? _realtimeAllowedOrigin;
     public FakeRealtimeSpeechTranscriptionSessionFactory RealtimeTranscription { get; } = new();
+    public FakeRealtimeTranslationProvider RealtimeTranslation { get; } = new();
 
     public TransLinkWebApplicationFactory(
         string connectionString,
@@ -72,6 +73,8 @@ public sealed class TransLinkWebApplicationFactory : WebApplicationFactory<Progr
             services.AddDbContext<AppDbContext>(options => options.UseNpgsql(_connectionString));
             services.RemoveAll<IRealtimeSpeechTranscriptionSessionFactory>();
             services.AddSingleton<IRealtimeSpeechTranscriptionSessionFactory>(RealtimeTranscription);
+            services.RemoveAll<IRealtimeTranslationProvider>();
+            services.AddSingleton<IRealtimeTranslationProvider>(RealtimeTranslation);
         });
     }
 }

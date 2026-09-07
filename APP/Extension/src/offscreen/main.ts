@@ -177,6 +177,8 @@ async function handleTransportFailure(errorCode: TransportErrorCode): Promise<vo
     ...currentTransportState,
     status: "error",
     transcriptionActive: false,
+    translationActive: false,
+    latestTranslation: null,
     errorCode,
   });
   await handleUnexpectedTermination(mapTransportError(errorCode));

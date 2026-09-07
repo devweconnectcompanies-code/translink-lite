@@ -13,9 +13,10 @@ import {
 
 describe("realtime protocol", () => {
   it("creates the versioned session start contract", () => {
-    expect(createSessionStart(48_000, 150, "en-US")).toEqual({
+    expect(createSessionStart(48_000, 150, "en-US", "es")).toEqual({
       type: "session.start",
-      protocolVersion: 2,
+      protocolVersion: 3,
+      targetLanguage: "es",
       audio: {
         encoding: AUDIO_ENCODING,
         sampleRateHz: 48_000,
@@ -44,19 +45,39 @@ describe("realtime protocol", () => {
 
     expect(frame.byteLength).toBe(BINARY_HEADER_LENGTH + 320);
     expect(String.fromCharCode(view.getUint8(0), view.getUint8(1))).toBe("TL");
-    expect(view.getUint8(2)).toBe(2);
+    expect(view.getUint8(2)).toBe(3);
     expect(view.getBigUint64(4, true)).toBe(9n);
     expect(view.getBigUint64(12, true)).toBe(1_350n);
     expect(view.getUint32(20, true)).toBe(320);
   });
 
   it("rejects unknown or mismatched server controls", () => {
-    expect(parseServerControl({ type: "session.accepted", protocolVersion: 2 }))
+    expect(parseServerControl({ type: "session.accepted", protocolVersion: 3 }))
       .not.toBeNull();
     expect(parseServerControl({ type: "session.accepted", protocolVersion: 1 }))
       .toBeNull();
-    expect(parseServerControl({ type: "translation.complete", protocolVersion: 2 }))
+    expect(parseServerControl({ type: "translation.complete", protocolVersion: 3 }))
       .toBeNull();
+  });
+
+  it("accepts a correlated final translation and rejects malformed translation data", () => {
+    expect(parseServerControl({
+      type: "translation.final",
+      protocolVersion: 3,
+      eventSequence: 3,
+      sourceResultId: "result-3",
+      text: "Texto traducido",
+      sourceLanguage: "en",
+      targetLanguage: "es",
+    })).toMatchObject({ type: "translation.final", sourceResultId: "result-3" });
+    expect(parseServerControl({
+      type: "translation.final",
+      protocolVersion: 3,
+      eventSequence: 3,
+      sourceResultId: "result-3",
+      sourceLanguage: "en",
+      targetLanguage: "es",
+    })).toBeNull();
   });
 
   it("targets the API default HTTP development profile", () => {

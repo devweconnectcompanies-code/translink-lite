@@ -150,6 +150,8 @@ Never commit, log, or paste a real token into documentation. Full client login, 
 
 Credentials are resolved only through the standard AWS SDK credential provider chain. Developers may select a local AWS CLI profile or use temporary environment credentials; deployed workloads should use a managed IAM role. Never place AWS credentials in tracked configuration, client storage, test fixtures, or documentation. See `SPEC/EXT-001D-AWS-Transcribe-Streaming-Foundation.md` for least-privilege IAM and manual validation.
 
+Amazon Translate reuses `AwsTranscribe:Region` for realtime translation and the same credential chain. Local validation additionally requires `translate:TranslateText`; readiness never makes a paid provider call. The AWS profile remains a process-level concern.
+
 For local IAM Identity Center testing after `aws sso login --profile translink-dev`, scope the developer profile and region to the API process:
 
 ```bash

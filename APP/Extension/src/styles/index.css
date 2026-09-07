@@ -68,6 +68,9 @@ h1 { margin-bottom: 0; font-size: 17px; line-height: 1.2; }
 .capture-button:disabled { color: #7890ad; background: #17263b; border-color: transparent; cursor: not-allowed; }
 .capture-button--stop { color: #fecaca; background: rgb(127 29 29 / 36%); border-color: rgb(248 113 113 / 35%); }
 .capture-error { margin: 0; color: #fca5a5; font-size: 11px; line-height: 1.45; }
+.latest-translation { display: grid; gap: 4px; padding: 8px; border-radius: 8px; background: #eef7ff; color: #17324d; }
+.latest-translation span { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; }
+.latest-translation strong { font-size: 12px; line-height: 1.4; }
 .spinner--small { width: 16px; height: 16px; margin: 0; }
 
 @keyframes spin { to { transform: rotate(360deg); } }

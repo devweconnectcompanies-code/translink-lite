@@ -12,17 +12,20 @@ public sealed class RealtimeAudioConnectionHandler
 {
     private readonly RealtimeAudioOptions _options;
     private readonly IRealtimeSpeechTranscriptionSessionFactory _sessionFactory;
+    private readonly RealtimeTranslationOrchestrator _translationOrchestrator;
     private readonly ILogger<RealtimeAudioConnectionHandler> _logger;
     private readonly IWebHostEnvironment _environment;
 
     public RealtimeAudioConnectionHandler(
         IOptions<RealtimeAudioOptions> options,
         IRealtimeSpeechTranscriptionSessionFactory sessionFactory,
+        RealtimeTranslationOrchestrator translationOrchestrator,
         ILogger<RealtimeAudioConnectionHandler> logger,
         IWebHostEnvironment environment)
     {
         _options = options.Value;
         _sessionFactory = sessionFactory;
+        _translationOrchestrator = translationOrchestrator;
         _logger = logger;
         _environment = environment;
     }
@@ -112,7 +115,8 @@ public sealed class RealtimeAudioConnectionHandler
 
             var control = RealtimeAudioProtocol.ParseControl(
                 rentedBuffer.AsSpan(0, handshake.Count));
-            if (!TryValidateStart(control, out var format, out var startError))
+            if (!TryValidateStart(
+                    control, out var format, out var targetLanguage, out var startError))
             {
                 await RejectAsync(socket, sendLock, sessionId, startError, cancellationToken);
                 return;
@@ -122,11 +126,19 @@ public sealed class RealtimeAudioConnectionHandler
             try
             {
                 await session.StartAsync(
-                    (transcript, eventCancellationToken) => SendControlAsync(
-                        socket,
-                        sendLock,
-                        transcript,
-                        eventCancellationToken),
+                    async (transcript, eventCancellationToken) =>
+                    {
+                        await SendControlAsync(
+                            socket, sendLock, transcript, eventCancellationToken);
+                        if (!transcript.IsFinal || string.IsNullOrWhiteSpace(transcript.Text))
+                            return;
+                        await TranslateAndSendAsync(
+                            socket,
+                            sendLock,
+                            transcript,
+                            targetLanguage!,
+                            eventCancellationToken);
+                    },
                     cancellationToken);
             }
             catch (RealtimeTranscriptionException exception)
@@ -146,7 +158,9 @@ public sealed class RealtimeAudioConnectionHandler
                 protocolVersion = _options.ProtocolVersion,
                 sessionId,
                 sourceLanguage = format!.SourceLanguage,
+                targetLanguage,
                 transcriptionActive = true,
+                translationActive = true,
             }, cancellationToken);
 
             _logger.LogInformation(
@@ -347,9 +361,11 @@ public sealed class RealtimeAudioConnectionHandler
     private bool TryValidateStart(
         ControlParseResult result,
         out RealtimeAudioFormat? format,
+        out string? targetLanguage,
         out string errorCode)
     {
         format = result.Message?.Audio;
+        targetLanguage = null;
         if (!result.IsValid || result.Message is null)
         {
             errorCode = result.ErrorCode ?? "invalid-control";
@@ -370,10 +386,69 @@ public sealed class RealtimeAudioConnectionHandler
             format!.SourceLanguage,
             out var normalizedSourceLanguage);
         format = format with { SourceLanguage = normalizedSourceLanguage };
+        RealtimeTranslationLanguageCatalog.TryNormalizeTarget(
+            result.Message.TargetLanguage,
+            out var normalizedTargetLanguage);
+        targetLanguage = normalizedTargetLanguage;
 
         errorCode = string.Empty;
         return true;
     }
+
+    private async ValueTask TranslateAndSendAsync(
+        WebSocket socket,
+        SemaphoreSlim sendLock,
+        RealtimeTranscriptEvent transcript,
+        string targetLanguage,
+        CancellationToken cancellationToken)
+    {
+        var outcome = await _translationOrchestrator.TranslateFinalAsync(
+            transcript, targetLanguage, cancellationToken);
+        if (outcome.IsSuccess)
+        {
+            var translated = outcome.Result!;
+            await SendControlAsync(socket, sendLock, new RealtimeTranslationEvent(
+                "translation.final",
+                _options.ProtocolVersion,
+                transcript.SessionId,
+                transcript.EventSequence,
+                transcript.ResultId,
+                translated.Text,
+                translated.SourceLanguage,
+                translated.TargetLanguage,
+                outcome.DurationMilliseconds), cancellationToken);
+            _logger.LogInformation(
+                "Realtime translation completed. SessionId: {SessionId}, SourceLanguage: {SourceLanguage}, TargetLanguage: {TargetLanguage}, DurationMs: {DurationMs}",
+                transcript.SessionId,
+                translated.SourceLanguage,
+                translated.TargetLanguage,
+                outcome.DurationMilliseconds);
+        }
+        else if (!outcome.Skipped)
+        {
+            _logger.LogWarning(
+                "Realtime translation failed. SessionId: {SessionId}, Category: {Category}",
+                transcript.SessionId,
+                outcome.ErrorCode);
+            await SendTranslationErrorAsync(
+                socket, sendLock, transcript.ResultId,
+                outcome.ErrorCode ?? "translation-failed", cancellationToken);
+        }
+    }
+
+    private ValueTask SendTranslationErrorAsync(
+        WebSocket socket,
+        SemaphoreSlim sendLock,
+        string sourceResultId,
+        string code,
+        CancellationToken cancellationToken) =>
+        SendControlAsync(socket, sendLock, new
+        {
+            type = "translation.error",
+            protocolVersion = _options.ProtocolVersion,
+            sourceResultId,
+            code,
+        }, cancellationToken);
 
     private bool IsValidStop(ControlParseResult result) =>
         result.IsValid &&

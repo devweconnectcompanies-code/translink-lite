@@ -5,7 +5,8 @@ namespace TransLink.Lite.Application.RealtimeAudio;
 public sealed record RealtimeControlMessage(
     string? Type,
     int ProtocolVersion,
-    RealtimeAudioFormat? Audio);
+    RealtimeAudioFormat? Audio,
+    string? TargetLanguage);
 
 public sealed record RealtimeAudioFormat(
     string Encoding,
@@ -62,6 +63,27 @@ public sealed record RealtimeTranscriptEvent(
     long? StartTimeMilliseconds,
     long? EndTimeMilliseconds,
     string SourceLanguage);
+
+public sealed record RealtimeTranslationRequest(
+    string Text,
+    string SourceLanguage,
+    string TargetLanguage);
+
+public sealed record RealtimeTranslationResult(
+    string Text,
+    string SourceLanguage,
+    string TargetLanguage);
+
+public sealed record RealtimeTranslationEvent(
+    string Type,
+    int ProtocolVersion,
+    Guid SessionId,
+    long EventSequence,
+    string SourceResultId,
+    string Text,
+    string SourceLanguage,
+    string TargetLanguage,
+    long DurationMilliseconds);
 
 public readonly record struct ControlParseResult(
     bool IsValid,

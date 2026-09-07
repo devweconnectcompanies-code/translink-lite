@@ -53,8 +53,24 @@ export function CaptureControl({
                     ? "Audio signal detected"
                     : "Listening for audio…"}
             </span>
+            {capture.transport.translationActive && (
+              <span>
+                Translation active · {capture.transport.finalTranslationsReceived} final translations
+              </span>
+            )}
           </div>
         </div>
+        {capture.transport.latestTranslation && (
+          <div className="latest-translation" aria-live="polite">
+            <span>Latest translation</span>
+            <strong>{capture.transport.latestTranslation}</strong>
+          </div>
+        )}
+        {capture.transport.translationErrorCode && (
+          <p className="inline-error" role="status">
+            Translation is temporarily unavailable; transcription continues.
+          </p>
+        )}
         <div
           className="audio-meter"
           role="meter"

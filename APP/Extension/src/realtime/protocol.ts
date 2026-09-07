@@ -1,10 +1,10 @@
-export const REALTIME_PROTOCOL_VERSION = 2;
+export const REALTIME_PROTOCOL_VERSION = 3;
 export const BINARY_HEADER_LENGTH = 24;
 export const AUDIO_ENCODING = "pcm_s16le";
 export const DEFAULT_CHUNK_DURATION_MS = 150;
 export const TRANSPORT_SAMPLE_RATE_HZ = 48_000;
 export const DEFAULT_REALTIME_ENDPOINT = "ws://localhost:5221/api/realtime/audio";
-export const WEBSOCKET_SUBPROTOCOL = "translink.realtime.v2";
+export const WEBSOCKET_SUBPROTOCOL = "translink.realtime.v3";
 export const BEARER_SUBPROTOCOL_PREFIX = "translink.bearer.";
 
 export interface RealtimeEndpointDetails {
@@ -41,6 +41,7 @@ export function sanitizeWebSocketCloseReason(reason: string): string {
 export interface SessionStartMessage {
   type: "session.start";
   protocolVersion: number;
+  targetLanguage: string;
   audio: {
     encoding: typeof AUDIO_ENCODING;
     sampleRateHz: number;
@@ -51,7 +52,7 @@ export interface SessionStartMessage {
 }
 
 export interface ServerControlMessage {
-  type: "session.accepted" | "session.rejected" | "session.stopped" | "transport.error" | "transcription.error" | "transcript.partial" | "transcript.final";
+  type: "session.accepted" | "session.rejected" | "session.stopped" | "transport.error" | "transcription.error" | "transcript.partial" | "transcript.final" | "translation.final" | "translation.error";
   protocolVersion: number;
   sessionId?: string;
   code?: string;
@@ -60,16 +61,21 @@ export interface ServerControlMessage {
   text?: string;
   isFinal?: boolean;
   sourceLanguage?: string;
+  targetLanguage?: string;
+  sourceResultId?: string;
+  durationMilliseconds?: number;
 }
 
 export function createSessionStart(
   sampleRateHz: number,
   chunkDurationMs: number,
   sourceLanguage: string,
+  targetLanguage: string,
 ): SessionStartMessage {
   return {
     type: "session.start",
     protocolVersion: REALTIME_PROTOCOL_VERSION,
+    targetLanguage,
     audio: {
       encoding: AUDIO_ENCODING,
       sampleRateHz,
@@ -92,6 +98,8 @@ export function parseServerControl(value: unknown): ServerControlMessage | null 
       "transcription.error",
       "transcript.partial",
       "transcript.final",
+      "translation.final",
+      "translation.error",
     ].includes(candidate.type ?? "") ||
     candidate.protocolVersion !== REALTIME_PROTOCOL_VERSION
   ) {
@@ -106,6 +114,18 @@ export function parseServerControl(value: unknown): ServerControlMessage | null 
       typeof candidate.text !== "string" ||
       typeof candidate.isFinal !== "boolean" ||
       typeof candidate.sourceLanguage !== "string")
+  ) {
+    return null;
+  }
+  if (
+    candidate.type === "translation.final" &&
+    (typeof candidate.eventSequence !== "number" ||
+      !Number.isSafeInteger(candidate.eventSequence) ||
+      candidate.eventSequence < 0 ||
+      typeof candidate.sourceResultId !== "string" ||
+      typeof candidate.text !== "string" ||
+      typeof candidate.sourceLanguage !== "string" ||
+      typeof candidate.targetLanguage !== "string")
   ) {
     return null;
   }

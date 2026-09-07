@@ -138,6 +138,10 @@ export default function App() {
         transcriptionActive: false,
         partialTranscriptsReceived: 0,
         finalTranscriptsReceived: 0,
+        translationActive: false,
+        finalTranslationsReceived: 0,
+        latestTranslation: null,
+        translationErrorCode: null,
         errorCode: null,
       },
     });

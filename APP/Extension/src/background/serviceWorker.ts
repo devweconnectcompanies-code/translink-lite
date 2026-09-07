@@ -22,7 +22,9 @@ const OFFSCREEN_DOCUMENT_PATH = "offscreen.html";
 const DEVELOPMENT_ACCESS_TOKEN_KEY = "developmentAccessToken";
 const REALTIME_ENDPOINT_KEY = "realtimeEndpoint";
 const SOURCE_LANGUAGE_KEY = "sourceLanguage";
+const TARGET_LANGUAGE_KEY = "targetLanguage";
 const DEFAULT_SOURCE_LANGUAGE = "en-US";
+const DEFAULT_TARGET_LANGUAGE = "es";
 
 let captureState: CaptureSnapshot = { ...IDLE_CAPTURE_STATE };
 let stateLoaded = false;
@@ -46,6 +48,12 @@ function isTransportSnapshot(value: unknown): value is TransportSnapshot {
     typeof candidate.finalTranscriptsReceived === "number" &&
     Number.isSafeInteger(candidate.finalTranscriptsReceived) &&
     candidate.finalTranscriptsReceived >= 0 &&
+    typeof candidate.translationActive === "boolean" &&
+    typeof candidate.finalTranslationsReceived === "number" &&
+    Number.isSafeInteger(candidate.finalTranslationsReceived) &&
+    candidate.finalTranslationsReceived >= 0 &&
+    (candidate.latestTranslation === null || typeof candidate.latestTranslation === "string") &&
+    (candidate.translationErrorCode === null || typeof candidate.translationErrorCode === "string") &&
     (candidate.errorCode === null || typeof candidate.errorCode === "string")
   );
 }
@@ -146,6 +154,7 @@ async function getRealtimeConfiguration() {
     DEVELOPMENT_ACCESS_TOKEN_KEY,
     REALTIME_ENDPOINT_KEY,
     SOURCE_LANGUAGE_KEY,
+    TARGET_LANGUAGE_KEY,
   ]);
   const accessToken = stored[DEVELOPMENT_ACCESS_TOKEN_KEY];
   if (typeof accessToken !== "string" || accessToken.trim().length === 0) {
@@ -154,6 +163,7 @@ async function getRealtimeConfiguration() {
 
   const configuredEndpoint = stored[REALTIME_ENDPOINT_KEY];
   const configuredSourceLanguage = stored[SOURCE_LANGUAGE_KEY];
+  const configuredTargetLanguage = stored[TARGET_LANGUAGE_KEY];
   return {
     accessToken: accessToken.trim(),
     endpoint:
@@ -165,6 +175,10 @@ async function getRealtimeConfiguration() {
       typeof configuredSourceLanguage === "string" && configuredSourceLanguage.trim().length > 0
         ? configuredSourceLanguage.trim()
         : DEFAULT_SOURCE_LANGUAGE,
+    targetLanguage:
+      typeof configuredTargetLanguage === "string" && configuredTargetLanguage.trim().length > 0
+        ? configuredTargetLanguage.trim()
+        : DEFAULT_TARGET_LANGUAGE,
   };
 }
 
@@ -214,6 +228,10 @@ async function failCapture(errorCode: CaptureErrorCode): Promise<CommandResponse
           transcriptionActive: false,
           partialTranscriptsReceived: captureState.transport.partialTranscriptsReceived,
           finalTranscriptsReceived: captureState.transport.finalTranscriptsReceived,
+          translationActive: false,
+          finalTranslationsReceived: captureState.transport.finalTranslationsReceived,
+          latestTranslation: null,
+          translationErrorCode: captureState.transport.translationErrorCode,
           errorCode: null,
         },
   };
@@ -258,6 +276,10 @@ async function startCapture(tabId: number): Promise<CommandResponse> {
       transcriptionActive: false,
       partialTranscriptsReceived: 0,
       finalTranscriptsReceived: 0,
+      translationActive: false,
+      finalTranslationsReceived: 0,
+      latestTranslation: null,
+      translationErrorCode: null,
       errorCode: null,
     },
   });

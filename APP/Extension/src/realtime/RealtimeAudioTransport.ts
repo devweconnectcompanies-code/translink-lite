@@ -19,6 +19,7 @@ export interface RealtimeTransportConfiguration {
   accessToken: string;
   chunkDurationMs: number;
   sourceLanguage: string;
+  targetLanguage: string;
 }
 
 export interface RealtimeTransportDiagnostic {
@@ -42,6 +43,10 @@ export class RealtimeAudioTransport {
   private transcriptionActive = false;
   private partialTranscriptsReceived = 0;
   private finalTranscriptsReceived = 0;
+  private translationActive = false;
+  private finalTranslationsReceived = 0;
+  private latestTranslation: string | null = null;
+  private translationErrorCode: string | null = null;
 
   constructor(
     private readonly configuration: RealtimeTransportConfiguration,
@@ -88,6 +93,7 @@ export class RealtimeAudioTransport {
           sampleRateHz,
           this.configuration.chunkDurationMs,
           this.configuration.sourceLanguage,
+          this.configuration.targetLanguage,
         )));
         logDevelopmentEvent("session.start.sent");
       };
@@ -112,6 +118,7 @@ export class RealtimeAudioTransport {
           clearTimeout(timeout);
           accepted = true;
           this.transcriptionActive = true;
+          this.translationActive = true;
           logDevelopmentEvent("session.accepted");
           this.onState(this.snapshot("connected"));
           resolve();
@@ -141,8 +148,19 @@ export class RealtimeAudioTransport {
           this.finalTranscriptsReceived += 1;
           logDevelopmentEvent("transcript.final", { code: message.eventSequence });
           this.onState(this.snapshot("streaming"));
+        } else if (message?.type === "translation.final") {
+          this.finalTranslationsReceived += 1;
+          this.latestTranslation = message.text ?? null;
+          this.translationErrorCode = null;
+          logDevelopmentEvent("translation.final", { code: message.eventSequence });
+          this.onState(this.snapshot("streaming"));
+        } else if (message?.type === "translation.error") {
+          this.translationErrorCode = sanitizeWebSocketCloseReason(message.code ?? "");
+          logDevelopmentEvent("translation.error", { code: this.translationErrorCode });
+          this.onState(this.snapshot("streaming"));
         } else if (message?.type === "session.stopped") {
           this.transcriptionActive = false;
+          this.translationActive = false;
           socket.close(1000, "session-stopped");
         }
       };
@@ -237,6 +255,10 @@ export class RealtimeAudioTransport {
       transcriptionActive: this.transcriptionActive,
       partialTranscriptsReceived: this.partialTranscriptsReceived,
       finalTranscriptsReceived: this.finalTranscriptsReceived,
+      translationActive: this.translationActive,
+      finalTranslationsReceived: this.finalTranslationsReceived,
+      latestTranslation: this.latestTranslation,
+      translationErrorCode: this.translationErrorCode,
       errorCode: null,
     };
   }

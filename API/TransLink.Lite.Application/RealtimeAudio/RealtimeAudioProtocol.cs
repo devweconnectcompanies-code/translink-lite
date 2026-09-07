@@ -5,12 +5,12 @@ namespace TransLink.Lite.Application.RealtimeAudio;
 
 public static class RealtimeAudioProtocol
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
     public const int BinaryHeaderLength = 24;
     public const byte MagicFirstByte = (byte)'T';
     public const byte MagicSecondByte = (byte)'L';
     public const string PcmSigned16LittleEndian = "pcm_s16le";
-    public const string WebSocketSubprotocol = "translink.realtime.v2";
+    public const string WebSocketSubprotocol = "translink.realtime.v3";
     public const string BearerSubprotocolPrefix = "translink.bearer.";
 
     public static ControlParseResult ParseControl(ReadOnlySpan<byte> utf8Json)
@@ -87,6 +87,12 @@ public static class RealtimeAudioProtocol
             format.ChunkDurationMs != expectedChunkDurationMs ||
             !RealtimeTranscriptionLanguageCatalog.IsSupported(format.SourceLanguage))
             return "unsupported-audio-format";
+
+        if (!RealtimeTranslationLanguageCatalog.TryMapSource(
+                format.SourceLanguage, out _) ||
+            !RealtimeTranslationLanguageCatalog.TryNormalizeTarget(
+                message.TargetLanguage, out _))
+            return "unsupported-translation-language";
 
         return null;
     }

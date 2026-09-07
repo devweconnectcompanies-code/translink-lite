@@ -93,6 +93,7 @@ builder.Services.AddScoped<ITranslationSessionService, TranslationSessionService
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ITranslationSessionRepository, TranslationSessionRepository>();
 builder.Services.AddAwsRealtimeTranscription(awsTranscribeOptions);
+builder.Services.AddSingleton<RealtimeTranslationOrchestrator>();
 builder.Services.AddScoped<RealtimeAudioConnectionHandler>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
